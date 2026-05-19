@@ -34,47 +34,53 @@ if (!window.storage) {
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 const PROVINCES = [
-  {id:1, n:'Normandie',     r:1,fdl:true, vp:0,par:false},
-  {id:2, n:'Artois',        r:1,fdl:true, vp:0,par:false},
-  {id:3, n:'Picardie',      r:1,fdl:false,vp:0,par:false},
-  {id:4, n:'Champagne',     r:1,fdl:false,vp:0,par:false},
-  {id:5, n:'Flandres',      r:1,fdl:true, vp:0,par:false},
-  {id:6, n:'Lorraine',      r:2,fdl:true, vp:0,par:false},
-  {id:7, n:'Alsace',        r:2,fdl:true, vp:1,par:false},
-  {id:8, n:'Franche-Comte', r:2,fdl:false,vp:0,par:false},
-  {id:9, n:'Bourgogne',     r:2,fdl:false,vp:0,par:false},
-  {id:10,n:'Orleanais',     r:3,fdl:false,vp:0,par:false},
-  {id:11,n:'Ile-de-France', r:3,fdl:false,vp:2,par:true},
-  {id:12,n:'Berry',         r:3,fdl:false,vp:0,par:false},
-  {id:13,n:'Bretagne',      r:4,fdl:true, vp:0,par:false},
-  {id:14,n:'Maine',         r:4,fdl:false,vp:0,par:false},
-  {id:15,n:'Anjou',         r:4,fdl:true, vp:0,par:false},
-  {id:16,n:'Poitou',        r:4,fdl:false,vp:0,par:false},
-  {id:17,n:'Saintonge',     r:4,fdl:false,vp:0,par:false},
-  {id:18,n:'Limousin',      r:5,fdl:false,vp:0,par:false},
-  {id:19,n:'Auvergne',      r:5,fdl:false,vp:0,par:false},
-  {id:20,n:'Lyonnais',      r:5,fdl:false,vp:1,par:false},
-  {id:21,n:'Dauphine',      r:5,fdl:true, vp:0,par:false},
-  {id:22,n:'Provence',      r:5,fdl:true, vp:0,par:false},
-  {id:23,n:'Guyenne',       r:6,fdl:true, vp:0,par:false},
-  {id:24,n:'Gascogne',      r:6,fdl:true, vp:0,par:false},
-  {id:25,n:'Navarre',       r:6,fdl:true, vp:0,par:false},
-  {id:26,n:'Languedoc',     r:6,fdl:false,vp:0,par:false},
-  {id:27,n:'Roussillon',    r:6,fdl:true, vp:0,par:false},
+  // Region 1 — Green (West)
+  {id:1,  n:'Normandie',          r:1, fdl:false, vp:0, par:false},
+  {id:2,  n:'Maine',              r:1, fdl:false, vp:0, par:false},
+  {id:3,  n:'Bretagne',           r:1, fdl:true,  vp:0, par:false},
+  {id:4,  n:'Touraine',           r:1, fdl:true,  vp:0, par:false},
+  // Region 2 — Pink (North-Centre)
+  {id:5,  n:'Artois',             r:2, fdl:true,  vp:0, par:false},
+  {id:6,  n:'Picardie',           r:2, fdl:false, vp:0, par:false},
+  {id:7,  n:'Rouen',              r:2, fdl:true,  vp:0, par:false},
+  {id:8,  n:'Ile-de-France',      r:2, fdl:true,  vp:2, par:true},
+  {id:9,  n:'Orleanais',          r:2, fdl:false, vp:0, par:false},
+  // Region 3 — Orange (East)
+  {id:10, n:'Champagne & Brie',   r:3, fdl:false, vp:0, par:false},
+  {id:11, n:'Alsace & Lorraine',  r:3, fdl:true,  vp:0, par:false},
+  {id:12, n:'Franche-Comte',      r:3, fdl:true,  vp:0, par:false},
+  {id:13, n:'Bourgogne',          r:3, fdl:true,  vp:0, par:false},
+  // Region 4 — Purple (Southwest)
+  {id:14, n:'Vendee',             r:4, fdl:true,  vp:0, par:false},
+  {id:15, n:'La Rochelle',        r:4, fdl:true,  vp:0, par:false},
+  {id:16, n:'Limousin',           r:4, fdl:false, vp:0, par:false},
+  {id:17, n:'Guyenne & Gascogne', r:4, fdl:true,  vp:0, par:false},
+  {id:18, n:'Bearn',              r:4, fdl:false, vp:0, par:false},
+  // Region 5 — Blue (Centre)
+  {id:19, n:'Berry',              r:5, fdl:false, vp:0, par:false},
+  {id:20, n:'Bourbonnais',        r:5, fdl:false, vp:0, par:false},
+  {id:21, n:'Lyonnais',           r:5, fdl:true,  vp:0, par:false},
+  {id:22, n:'Dombes',             r:5, fdl:true,  vp:0, par:false},
+  // Region 6 — Yellow (South)
+  {id:23, n:'Auvergne',           r:6, fdl:false, vp:0, par:false},
+  {id:24, n:'Dauphine',           r:6, fdl:false, vp:0, par:false},
+  {id:25, n:'Provence',           r:6, fdl:true,  vp:0, par:false},
+  {id:26, n:'Languedoc',          r:6, fdl:true,  vp:0, par:false},
+  {id:27, n:'Roussillon',         r:6, fdl:false, vp:0, par:false},
 ];
 const BOXES = [
-  {id:'battle', n:'Battle Box',     type:'box'},
   {id:'govt',   n:'Government Box', type:'box'},
-  {id:'turn_1', n:'Turn Box 1',     type:'box'},
-  {id:'turn_2', n:'Turn Box 2',     type:'box'},
-  {id:'turn_3', n:'Turn Box 3',     type:'box'},
-  {id:'turn_4', n:'Turn Box 4',     type:'box'},
+  {id:'battle', n:'Battle Box',     type:'box'},
+  {id:'turn_1', n:'Turn 1',         type:'box'},
+  {id:'turn_2', n:'Turn 2',         type:'box'},
+  {id:'turn_3', n:'Turn 3',         type:'box'},
+  {id:'turn_4', n:'Turn 4',         type:'box'},
 ];
 const ALL_ITEMS = [
   ...PROVINCES.map(p=>({...p,type:'province'})),
   ...BOXES,
 ];
-const RGN_COL = {1:'#c07818',2:'#14906a',3:'#b87a10',4:'#18980e',5:'#7832c0',6:'#c03010'};
+const RGN_COL = {1:'#3a8a28',2:'#c04878',3:'#d4892a',4:'#7832a0',5:'#2878b8',6:'#8a9428'};
 const GOLD = '#c9a850';
 const CIN  = {fontFamily:"'Cinzel',serif"};
 const GAR  = {fontFamily:"'EB Garamond',Georgia,serif"};
