@@ -28,22 +28,17 @@ if (!window.storage) {
   };
 }
 
-// ── Colour definitions ─────────────────────────────────────────────────────────
-const FACTION_RANGES = {
-  red:   { h:[345,20],  s:40, vMin:35, vMax:95, label:'Radical',  col:'#c0392b' },
-  blue:  { h:[195,235], s:40, vMin:30, vMax:85, label:'Moderate', col:'#2471a3' },
-  white: { h:[0,360],   s:0,  sMax:22, vMin:72, label:'Royalist', col:'#a0a8b0' },
-};
+// ── Colour constants ───────────────────────────────────────────────────────────
 const PLAYER_RANGES = [
-  { id:0, col:'#d44040', h:[345,15],  s:65, vMin:45, label:'P1' },
-  { id:1, col:'#4080d4', h:[205,230], s:65, vMin:45, label:'P2' },
-  { id:2, col:'#40b868', h:[100,150], s:55, vMin:40, label:'P3' },
-  { id:3, col:'#d49420', h:[30,60],   s:65, vMin:50, label:'P4' },
-  { id:4, col:'#9040d4', h:[265,300], s:55, vMin:35, label:'P5' },
-  { id:5, col:'#14a8a0', h:[165,195], s:55, vMin:40, label:'P6' },
+  { id:0, col:'#d44040', h:[345,15],  s:65, vMin:45 },
+  { id:1, col:'#4080d4', h:[205,230], s:65, vMin:45 },
+  { id:2, col:'#40b868', h:[100,150], s:55, vMin:40 },
+  { id:3, col:'#d49420', h:[30,60],   s:65, vMin:50 },
+  { id:4, col:'#9040d4', h:[265,300], s:55, vMin:35 },
+  { id:5, col:'#14a8a0', h:[165,195], s:55, vMin:40 },
 ];
+const FACTION_COL = {red:'#c0392b', blue:'#2471a3', white:'#a0a8b0'};
 const REGION_COLS = {1:'#3a8a28',2:'#c04878',3:'#d4892a',4:'#7832a0',5:'#2878b8',6:'#8a9428'};
-const FACTION_COL = {red:'#c0392b',blue:'#2471a3',white:'#a0a8b0'};
 const GOLD = '#c9a850';
 const CIN  = {fontFamily:"'Cinzel',serif"};
 const GAR  = {fontFamily:"'EB Garamond',serif"};
@@ -63,8 +58,7 @@ function applyH(H,x,y){
   const w=H[2][0]*x+H[2][1]*y+H[2][2];
   return [(H[0][0]*x+H[0][1]*y+H[0][2])/w,(H[1][0]*x+H[1][1]*y+H[1][2])/w];
 }
-function invertH(H){ try{ return math.inv(math.matrix(H)).toArray(); } catch(e){ return null; } }
-
+function invertH(H){ try{ return math.inv(math.matrix(H)).toArray(); }catch(e){return null;} }
 function pointInPoly(px,py,poly){
   let inside=false;
   for(let i=0,j=poly.length-1;i<poly.length;j=i++){
@@ -73,186 +67,135 @@ function pointInPoly(px,py,poly){
   }
   return inside;
 }
-function findRegion(bx,by,calData){
-  for(const item of Object.values(calData))
-    if(item.polygon&&pointInPoly(bx,by,item.polygon)) return item.id;
-  return null;
-}
-function nearestCentroid(bx,by,calData){
-  let bestId=null,bestD=Infinity;
-  for(const item of Object.values(calData)){
-    if(item.type!=='province') continue;
-    const d=(bx-item.board_x)**2+(by-item.board_y)**2;
-    if(d<bestD){bestD=d;bestId=item.id;}
-  }
-  return bestId;
-}
+function findRegion(bx,by,cal){ for(const item of Object.values(cal)) if(item.polygon&&pointInPoly(bx,by,item.polygon)) return item.id; return null; }
+function nearestCentroid(bx,by,cal){ let id=null,d=Infinity; for(const item of Object.values(cal)){ if(item.type!=='province') continue; const dd=(bx-item.board_x)**2+(by-item.board_y)**2; if(dd<d){d=dd;id=item.id;} } return id; }
+function hueDiff(a,b){ return Math.min(Math.abs(a-b),360-Math.abs(a-b)); }
 
 // ── Colour analysis ────────────────────────────────────────────────────────────
 function rgbToHsv(r,g,b){
-  r/=255; g/=255; b/=255;
-  const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;
-  let h=0,s=max===0?0:d/max,v=max;
-  if(d>0) switch(max){
-    case r: h=((g-b)/d+(g<b?6:0))/6; break;
-    case g: h=((b-r)/d+2)/6; break;
-    case b: h=((r-g)/d+4)/6; break;
-  }
-  return [h*360, s*100, v*100];
+  r/=255;g/=255;b/=255;
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;
+  let h=0,s=mx===0?0:d/mx,v=mx;
+  if(d>0) switch(mx){ case r:h=((g-b)/d+(g<b?6:0))/6;break; case g:h=((b-r)/d+2)/6;break; case b:h=((r-g)/d+4)/6;break; }
+  return [h*360,s*100,v*100];
 }
-function hueInRange(h,[lo,hi]){ return lo>hi ? h>=lo||h<=hi : h>=lo&&h<=hi; }
-
+function hueIn(h,[lo,hi]){ return lo>hi?h>=lo||h<=hi:h>=lo&&h<=hi; }
 function classifyPixel(r,g,b){
   const [h,s,v]=rgbToHsv(r,g,b);
   if(v<18) return null;
-  if(s<FACTION_RANGES.white.sMax&&v>FACTION_RANGES.white.vMin) return 'white';
-  for(const p of PLAYER_RANGES)
-    if(s>=p.s&&v>=p.vMin&&hueInRange(h,p.h)) return 'player_'+p.id;
-  for(const [name,f] of Object.entries(FACTION_RANGES)){
-    if(name==='white') continue;
-    if(s>=f.s&&v>=f.vMin&&v<=f.vMax&&hueInRange(h,f.h)) return name;
-  }
+  if(s<22&&v>72) return 'white';
+  for(const p of PLAYER_RANGES) if(s>=p.s&&v>=p.vMin&&hueIn(h,p.h)) return 'player_'+p.id;
+  if(s>=40&&v>=35&&v<=95&&hueIn(h,[345,20])) return 'red';
+  if(s>=40&&v>=30&&v<=85&&hueIn(h,[195,235])) return 'blue';
   return null;
 }
 
-function sampleRegion(imageData,cx,cy,radius,canvasW,canvasH,baseline){
-  const counts={red:0,blue:0,white:0,total:0}, playerCounts={};
-  const r=Math.round(radius),cxi=Math.round(cx),cyi=Math.round(cy);
+function sampleRegion(imageData,cx,cy,radius,W,H,baseline){
+  const counts={red:0,blue:0,white:0,total:0},pc={};
+  const r=Math.round(radius),xi=Math.round(cx),yi=Math.round(cy);
   for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
     if(dx*dx+dy*dy>r*r) continue;
-    const px=cxi+dx,py=cyi+dy;
-    if(px<0||py<0||px>=canvasW||py>=canvasH) continue;
-    const idx=(py*canvasW+px)*4;
-    // Skip pixels that look like the province's own background colour
+    const px=xi+dx,py=yi+dy;
+    if(px<0||py<0||px>=W||py>=H) continue;
+    const i=(py*W+px)*4;
     if(baseline){
-      const [ph,ps,pv]=rgbToHsv(imageData.data[idx],imageData.data[idx+1],imageData.data[idx+2]);
-      if(hueDiff(ph,baseline.h)<28 && Math.abs(ps-baseline.s)<28 && Math.abs(pv-baseline.v)<28) continue;
+      const [ph,ps,pv]=rgbToHsv(imageData.data[i],imageData.data[i+1],imageData.data[i+2]);
+      if(hueDiff(ph,baseline.h)<28&&Math.abs(ps-baseline.s)<28&&Math.abs(pv-baseline.v)<28) continue;
     }
-    const label=classifyPixel(imageData.data[idx],imageData.data[idx+1],imageData.data[idx+2]);
-    if(!label) continue;
+    const lbl=classifyPixel(imageData.data[i],imageData.data[i+1],imageData.data[i+2]);
+    if(!lbl) continue;
     counts.total++;
-    if(label==='red'||label==='blue'||label==='white') counts[label]++;
-    else if(label.startsWith('player_')){ const pid=parseInt(label.split('_')[1]); playerCounts[pid]=(playerCounts[pid]||0)+1; }
+    if(lbl==='red'||lbl==='blue'||lbl==='white') counts[lbl]++;
+    else if(lbl.startsWith('player_')){ const pid=parseInt(lbl.split('_')[1]); pc[pid]=(pc[pid]||0)+1; }
   }
-  // Require a solid block of colour, not just scattered pixels matching the range.
-  // This prevents the board's printed surface (warm parchment tones) triggering false positives.
-  const minPx=Math.max(25, counts.total*0.28);
-  const faction=
-    counts.red>minPx&&counts.red>=counts.blue&&counts.red>=counts.white?'red':
+  const minPx=Math.max(25,counts.total*0.28);
+  const faction=counts.red>minPx&&counts.red>=counts.blue&&counts.red>=counts.white?'red':
     counts.blue>minPx&&counts.blue>=counts.red&&counts.blue>=counts.white?'blue':
     counts.white>minPx&&counts.white>=counts.red&&counts.white>=counts.blue?'white':null;
   let player=null,maxP=6;
-  for(const [pid,cnt] of Object.entries(playerCounts)) if(cnt>maxP){maxP=cnt;player=parseInt(pid);}
-  return {faction,player,counts,playerCounts,camX:cx,camY:cy};
+  for(const [pid,cnt] of Object.entries(pc)) if(cnt>maxP){maxP=cnt;player=parseInt(pid);}
+  return {faction,player,counts,playerCounts:pc,camX:cx,camY:cy};
 }
 
-function negateCalib(raw){
-  // Boundary editor stored coords in negative space due to camera orientation.
-  // Negate all board_x/board_y and polygon coords to put them in the correct 0-1 range.
+function captureBaseline(imageData,H_inv,cal,W,H,R){
   const out={};
-  for(const [id,item] of Object.entries(raw)){
-    out[id]={
-      ...item,
-      board_x: -item.board_x,
-      board_y: -item.board_y,
-      polygon: item.polygon ? item.polygon.map(([x,y])=>[-x,-y]) : item.polygon,
-    };
+  for(const [key,item] of Object.entries(cal)){
+    if(item.type!=='province') continue;
+    const [px,py]=applyH(H_inv,item.board_x,item.board_y);
+    if(px<0||py<0||px>W||py>H) continue;
+    let sh=0,ss=0,sv=0,n=0;
+    const r=Math.round(R),xi=Math.round(px),yi=Math.round(py);
+    for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+      if(dx*dx+dy*dy>r*r) continue;
+      const spx=xi+dx,spy=yi+dy;
+      if(spx<0||spy<0||spx>=W||spy>=H) continue;
+      const i=(spy*W+spx)*4;
+      const [h,s,v]=rgbToHsv(imageData.data[i],imageData.data[i+1],imageData.data[i+2]);
+      sh+=h;ss+=s;sv+=v;n++;
+    }
+    if(n>0) out[key]={h:sh/n,s:ss/n,v:sv/n};
   }
   return out;
 }
-// ── Baseline capture ──────────────────────────────────────────────────────────
-// Records the empty-board HSV at each province centroid so we can ignore the
-// board's own region colours and only fire when a cube changes the reading.
-function captureBaseline(imageData, H_inv, calData, canvasW, canvasH, sampleR){
-  const baseline={};
-  for(const [key,item] of Object.entries(calData)){
-    if(item.type!=='province') continue;
-    const [px,py]=applyH(H_inv,item.board_x,item.board_y);
-    if(px<0||py<0||px>canvasW||py>canvasH) continue;
-    let sumH=0,sumS=0,sumV=0,count=0;
-    const r=Math.round(sampleR),cxi=Math.round(px),cyi=Math.round(py);
-    for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
-      if(dx*dx+dy*dy>r*r) continue;
-      const spx=cxi+dx,spy=cyi+dy;
-      if(spx<0||spy<0||spx>=canvasW||spy>=canvasH) continue;
-      const idx=(spy*canvasW+spx)*4;
-      const [h,s,v]=rgbToHsv(imageData.data[idx],imageData.data[idx+1],imageData.data[idx+2]);
-      sumH+=h; sumS+=s; sumV+=v; count++;
-    }
-    if(count>0) baseline[key]={h:sumH/count, s:sumS/count, v:sumV/count};
+
+function negateCalib(raw){
+  const out={};
+  for(const [id,item] of Object.entries(raw)){
+    out[id]={...item,board_x:-item.board_x,board_y:-item.board_y,
+      polygon:item.polygon?item.polygon.map(([x,y])=>[-x,-y]):item.polygon};
   }
-  return baseline;
+  return out;
 }
-
-function hueDiff(a,b){ return Math.min(Math.abs(a-b), 360-Math.abs(a-b)); }
-
 async function loadCalib(){
-  try{
-    const r=await window.storage.get('liberte_cal');
-    if(r) return negateCalib(JSON.parse(r.value));
-  } catch(e){}
-  // Fallback: try fetching from repo
-  try{
-    const r=await fetch('liberte-calibration.json');
-    if(r.ok){
-      const data=await r.json();
-      const neg=negateCalib(data);
-      await window.storage.set('liberte_cal',JSON.stringify(data));
-      return neg;
-    }
-  } catch(e){}
+  try{ const r=await window.storage.get('liberte_cal'); if(r) return negateCalib(JSON.parse(r.value)); } catch(e){}
+  try{ const r=await fetch('liberte-calibration.json'); if(r.ok){ const d=await r.json(); await window.storage.set('liberte_cal',JSON.stringify(d)); return negateCalib(d); } } catch(e){}
   return null;
 }
 
-// ── Shared UI ──────────────────────────────────────────────────────────────────
-function Btn({onClick,col=GOLD,children,full,sm,disabled,active}){
-  return <button disabled={disabled} onClick={onClick} style={{
-    background:active?`${col}44`:`${col}22`,border:`1px solid ${col}${disabled?'33':active?'cc':'88'}`,
-    borderRadius:'6px',padding:sm?'7px 12px':'11px 20px',color:disabled?col+'44':col,
-    ...CIN,fontSize:sm?'10px':'11px',letterSpacing:'1px',width:full?'100%':'auto',
-    display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'5px',
-  }}>{children}</button>;
-}
-
-// ── Main app ───────────────────────────────────────────────────────────────────
 const PROMPTS=['0 — Top-Left','1 — Top-Right','2 — Bottom-Right','3 — Bottom-Left'];
 
+// ── App ────────────────────────────────────────────────────────────────────────
 function App(){
-  const videoRef  = useRef(null);
-  const canvasRef = useRef(null);
-  const rafRef    = useRef(null);
-  const streamRef = useRef(null);
-  const HRef      = useRef(null);
-  const H_fwd     = useRef(null);   // forward H (camera→board) for PIP verification
-  const calibRef  = useRef(null);
-  const stateRef  = useRef({});
-  const debugRef  = useRef(false);
-  const probeRef  = useRef(null);   // pending probe request from tap
+  const videoRef   = useRef(null);
+  const canvasRef  = useRef(null);
+  const rafRef     = useRef(null);
+  const streamRef  = useRef(null);
+  const HRef       = useRef(null);
+  const H_fwd      = useRef(null);
+  const calibRef   = useRef(null);
+  const stateRef   = useRef({});
+  const debugRef   = useRef(false);
+  const probeRef   = useRef(null);
+  const baselineRef       = useRef(null);
+  const captureBaselineRef= useRef(null);
 
-  const [phase,     setPhase]     = useState('loading');
-  const [calib,     setCalib]     = useState(null);
-  const [mTaps,     setMTaps]     = useState([]);
-  const [gameState, setGameState] = useState({});
-  const [serverUrl, setServerUrl] = useState('');
-  const [lastPost,  setLastPost]  = useState(null);
-  const [camError,  setCamError]  = useState(null);
-  const [toast,     setToast]     = useState(null);
-  const [pasteMode, setPasteMode] = useState(false);
-  const [pasteText, setPasteText] = useState('');
+  const [phase,      setPhase]      = useState('loading');
+  const [calib,      setCalib]      = useState(null);
+  const [mTaps,      setMTaps]      = useState([]);
+  const [gameState,  setGameState]  = useState({});
+  const [serverUrl,  setServerUrl]  = useState('');
+  const [lastPost,   setLastPost]   = useState(null);
+  const [camError,   setCamError]   = useState(null);
+  const [toast,      setToast]      = useState(null);
+  const [pasteMode,  setPasteMode]  = useState(false);
+  const [pasteText,  setPasteText]  = useState('');
   const [debugMode,  setDebugMode]  = useState(false);
   const [hasBaseline,setHasBaseline]= useState(false);
-  const [probe,     setProbe]     = useState(null);  // {x,y,h,s,v,label,rgb}
+  const [probe,      setProbe]      = useState(null);
 
   const showToast=(m,d=2200)=>{ setToast(m); setTimeout(()=>setToast(null),d); };
 
+  // Load calibration on mount
   useEffect(()=>{
     loadCalib().then(c=>{ if(c){setCalib(c);calibRef.current=c;} setPhase('setup'); });
   },[]);
 
-  useEffect(()=>{ if(phase==='markers'||phase==='running') startCam(); },[phase]);
-
-  // Keep debugRef in sync so animation loop can read it without closure issues
   useEffect(()=>{ debugRef.current=debugMode; },[debugMode]);
+
+  // Start camera when entering marker or running phase
+  useEffect(()=>{
+    if(phase==='markers'||phase==='running') startCam();
+  },[phase]);
 
   const startCam=useCallback(async()=>{
     try{
@@ -261,23 +204,14 @@ function App(){
       streamRef.current=stream;
       const v=videoRef.current; if(!v) return;
       v.srcObject=stream;
-      // iOS sometimes pauses the video — restart it automatically
-      v.onpause=()=>{ try{ v.play(); } catch(e){} };
-      // Size canvas to screen immediately so taps + drawing work before video metadata arrives
-      const c=canvasRef.current;
-      if(c){
-        c.width  = window.innerWidth  * window.devicePixelRatio;
-        c.height = window.innerHeight * window.devicePixelRatio;
-        c.style.width='100%'; c.style.height='100%';
-      }
+      v.onpause=()=>{ try{v.play();}catch(e){} };
       v.onloadedmetadata=()=>{
         v.play();
         const c=canvasRef.current; if(!c) return;
-        // Upgrade to native camera resolution once known
-        c.width  = v.videoWidth  || 1280;
-        c.height = v.videoHeight || 720;
+        c.width  = v.videoWidth  || window.innerWidth;
+        c.height = v.videoHeight || window.innerHeight;
       };
-    } catch(e){ setCamError('Camera access denied.'); }
+    }catch(e){ setCamError('Camera access denied: '+e.message); }
   },[]);
 
   const postState=useCallback(async(state)=>{
@@ -285,197 +219,167 @@ function App(){
     try{
       await fetch(serverUrl+'/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ts:Date.now(),provinces:state})});
       setLastPost(new Date().toLocaleTimeString());
-    } catch(e){}
+    }catch(e){}
   },[serverUrl]);
 
-  // ── Animation loop ─────────────────────────────────────────────────────────────
+  // ── Animation loop ─────────────────────────────────────────────────────────
   useEffect(()=>{
     let frameCount=0;
     const loop=()=>{
       try{
-      const canvas=canvasRef.current,video=videoRef.current;
-      if(!canvas||!video){rafRef.current=requestAnimationFrame(loop);return;}
-      const ctx=canvas.getContext('2d');
-      // Ensure video is playing — iOS can silently pause it
-      if(video.paused&&video.readyState>=2){ try{ video.play(); } catch(e){} }
-      if(video.readyState>=2) ctx.drawImage(video,0,0,canvas.width,canvas.height);
-      const R=canvas.width/1000;
+        const canvas=canvasRef.current,video=videoRef.current;
+        if(!canvas||!video){ rafRef.current=requestAnimationFrame(loop); return; }
+        const ctx=canvas.getContext('2d');
+        if(video.paused&&video.readyState>=2){ try{video.play();}catch(e){} }
+        if(video.readyState>=2) ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        const R=Math.max(0.5,canvas.width/1000);
 
-      // ── Baseline capture (triggered after marker setup) ─────────────────────
-      if(captureBaselineRef.current && video.readyState>=2){
-        const capH_inv = captureBaselineRef.current;
-        captureBaselineRef.current = null; // clear flag immediately
-        try{
-          const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
-          const SAMPLE_R=Math.max(14,canvas.width*0.013);
-          baselineRef.current=captureBaseline(imgData,capH_inv,calibRef.current,canvas.width,canvas.height,SAMPLE_R);
-          setHasBaseline(true);
-          setToast('Baseline captured ✓');
-          setTimeout(()=>setToast(null),2000);
-        } catch(e){
-          console.error('Baseline capture error:',e);
-          setToast('Baseline failed — will retry');
-          setTimeout(()=>setToast(null),2000);
-          // Retry on next frame
-          setTimeout(()=>{ captureBaselineRef.current=capH_inv; },500);
-        }
-      }
-
-      // ── Marker phase ────────────────────────────────────────────────────────
-      if(phase==='markers'){
-        mTaps.forEach(({cx,cy},i)=>{
-          ctx.beginPath(); ctx.arc(cx,cy,16*R,0,Math.PI*2);
-          ctx.fillStyle=GOLD; ctx.fill();
-          ctx.strokeStyle='#111'; ctx.lineWidth=3*R; ctx.stroke();
-          ctx.fillStyle='#111'; ctx.font=`bold ${14*R}px sans-serif`;
-          ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.fillText(String(i),cx,cy);
-        });
-      }
-
-      // ── Running phase ───────────────────────────────────────────────────────
-      if(phase==='running'&&HRef.current&&calibRef.current){
-        frameCount++;
-        const H_inv=HRef.current, calData=calibRef.current;
-        const isDebug=debugRef.current;
-        const SAMPLE_R=Math.max(14,canvas.width*0.013); // ~1.3% of frame width
-
-        // ── Detection (every 3rd frame) ────────────────────────────────────
-        let newState={...stateRef.current};
-        if(frameCount%3===0){
-          let imageData;
-          try{ imageData=ctx.getImageData(0,0,canvas.width,canvas.height); } catch(e){}
-          if(imageData){
-            for(const [key,item] of Object.entries(calData)){
-              if(item.type!=='province') continue;
-              const [px,py]=applyH(H_inv,item.board_x,item.board_y);
-              if(px<0||py<0||px>canvas.width||py>canvas.height) continue;
-              const bl=baselineRef.current?.[key]||null;
-              const result=sampleRegion(imageData,px,py,SAMPLE_R,canvas.width,canvas.height,bl);
-              newState[key]={...item,...result};
-            }
-            // PIP verification pass
-            if(H_fwd.current) for(const [key,s] of Object.entries(newState)){
-              if(s.player==null||!s.camX) continue;
-              const [bx,by]=applyH(H_fwd.current,s.camX,s.camY);
-              const correctId=findRegion(bx,by,calData)||nearestCentroid(bx,by,calData);
-              if(String(correctId)!==String(key)){
-                newState[key]={...newState[key],player:null,faction:null};
-                if(newState[correctId]) newState[correctId]={...newState[correctId],player:s.player,faction:s.faction};
-              }
-            }
-            // Handle probe request
-            if(probeRef.current&&imageData){
-              const {cx,cy}=probeRef.current;
-              const px=Math.round(cx), py=Math.round(cy);
-              if(px>=0&&py>=0&&px<canvas.width&&py<canvas.height){
-                const idx=(py*canvas.width+px)*4;
-                const r=imageData.data[idx],g=imageData.data[idx+1],b=imageData.data[idx+2];
-                const [h,sat,v]=rgbToHsv(r,g,b);
-                const label=classifyPixel(r,g,b);
-                setProbe({cx,cy,h:Math.round(h),s:Math.round(sat),v:Math.round(v),label,rgb:[r,g,b]});
-              }
-              probeRef.current=null;
-            }
-            stateRef.current=newState;
-            setGameState({...newState});
-            if(frameCount%30===0) postState(newState);
+        // Baseline capture — triggered by captureBaselineRef being set
+        if(captureBaselineRef.current&&video.readyState>=2){
+          const H_inv=captureBaselineRef.current;
+          captureBaselineRef.current=null;
+          try{
+            const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+            const SR=Math.max(14,canvas.width*0.013);
+            baselineRef.current=captureBaseline(imgData,H_inv,calibRef.current,canvas.width,canvas.height,SR);
+            setHasBaseline(true);
+            setToast('Baseline captured ✓'); setTimeout(()=>setToast(null),2000);
+          }catch(e){
+            console.error('Baseline error:',e);
+            // Retry next frame
+            setTimeout(()=>{ captureBaselineRef.current=H_inv; },300);
           }
         }
 
-        // ── Debug: polygon boundaries ──────────────────────────────────────
-        if(isDebug){
-          for(const [key,item] of Object.entries(calData)){
+        // Marker tap indicators
+        if(phase==='markers'){
+          mTaps.forEach(({cx,cy},i)=>{
+            ctx.beginPath(); ctx.arc(cx,cy,16*R,0,Math.PI*2);
+            ctx.fillStyle=GOLD; ctx.fill();
+            ctx.strokeStyle='#111'; ctx.lineWidth=3*R; ctx.stroke();
+            ctx.fillStyle='#111'; ctx.font=`bold ${14*R}px sans-serif`;
+            ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText(String(i),cx,cy);
+          });
+        }
+
+        // Running detection
+        if(phase==='running'&&HRef.current&&calibRef.current){
+          frameCount++;
+          const H_inv=HRef.current, cal=calibRef.current;
+          const isDebug=debugRef.current;
+          const SR=Math.max(14,canvas.width*0.013);
+          let newState={...stateRef.current};
+
+          if(frameCount%3===0){
+            let imgData; try{imgData=ctx.getImageData(0,0,canvas.width,canvas.height);}catch(e){}
+            if(imgData){
+              for(const [key,item] of Object.entries(cal)){
+                if(item.type!=='province') continue;
+                const [px,py]=applyH(H_inv,item.board_x,item.board_y);
+                if(px<0||py<0||px>canvas.width||py>canvas.height) continue;
+                const bl=baselineRef.current?.[key]||null;
+                newState[key]={...item,...sampleRegion(imgData,px,py,SR,canvas.width,canvas.height,bl)};
+              }
+              // PIP verification
+              if(H_fwd.current) for(const [key,s] of Object.entries(newState)){
+                if(s.player==null||!s.camX) continue;
+                const [bx,by]=applyH(H_fwd.current,s.camX,s.camY);
+                const cid=findRegion(bx,by,cal)||nearestCentroid(bx,by,cal);
+                if(String(cid)!==String(key)){
+                  newState[key]={...newState[key],player:null,faction:null};
+                  if(newState[cid]) newState[cid]={...newState[cid],player:s.player,faction:s.faction};
+                }
+              }
+              // Probe
+              if(probeRef.current){
+                const {cx,cy}=probeRef.current; probeRef.current=null;
+                const px2=Math.round(cx),py2=Math.round(cy);
+                if(px2>=0&&py2>=0&&px2<canvas.width&&py2<canvas.height){
+                  const i2=(py2*canvas.width+px2)*4;
+                  const r2=imgData.data[i2],g2=imgData.data[i2+1],b2=imgData.data[i2+2];
+                  const [h2,sat2,v2]=rgbToHsv(r2,g2,b2);
+                  setProbe({cx,cy,h:Math.round(h2),s:Math.round(sat2),v:Math.round(v2),label:classifyPixel(r2,g2,b2),rgb:[r2,g2,b2]});
+                }
+              }
+              stateRef.current=newState;
+              setGameState({...newState});
+              if(frameCount%30===0) postState(newState);
+            }
+          }
+
+          // Debug polygon overlay
+          if(isDebug) for(const [,item] of Object.entries(cal)){
             if(!item.polygon) continue;
             const pts=item.polygon.map(([bx,by])=>applyH(H_inv,bx,by));
-            ctx.beginPath();
-            ctx.moveTo(pts[0][0],pts[0][1]);
+            const col=item.type==='box'?GOLD:(REGION_COLS[item.region]||'#fff');
+            ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
             pts.slice(1).forEach(([x,y])=>ctx.lineTo(x,y));
             ctx.closePath();
-            const col=item.type==='box'?GOLD:(REGION_COLS[item.region]||'#ffffff');
             ctx.strokeStyle=col+'cc'; ctx.lineWidth=1.5*R; ctx.stroke();
             ctx.fillStyle=col+'18'; ctx.fill();
           }
-        }
 
-        // ── Province sample circles ────────────────────────────────────────
-        for(const [key,item] of Object.entries(calData)){
-          if(item.type!=='province') continue;
-          const [px,py]=applyH(H_inv,item.board_x,item.board_y);
-          if(px<SAMPLE_R||py<SAMPLE_R||px>canvas.width-SAMPLE_R||py>canvas.height-SAMPLE_R) continue;
-          const s=newState[key];
-          const fc=s?.faction, pc=s?.player!=null?PLAYER_RANGES[s.player]?.col:null;
-
-          ctx.beginPath(); ctx.arc(px,py,SAMPLE_R,0,Math.PI*2);
-          ctx.strokeStyle=fc?FACTION_COL[fc]+'aa':'rgba(255,255,255,0.18)';
-          ctx.lineWidth=isDebug?2.5*R:1.5*R; ctx.stroke();
-          if(fc){ ctx.beginPath(); ctx.arc(px,py,SAMPLE_R,0,Math.PI*2); ctx.fillStyle=FACTION_COL[fc]+'33'; ctx.fill(); }
-          if(pc){ ctx.beginPath(); ctx.arc(px,py,7*R,0,Math.PI*2); ctx.fillStyle=pc; ctx.fill(); ctx.strokeStyle='white'; ctx.lineWidth=1.5*R; ctx.stroke(); }
-
-          // Debug: show sample counts
-          if(isDebug){
-            ctx.fillStyle='rgba(255,255,255,0.85)';
-            ctx.font=`bold ${9*R}px sans-serif`;
+          // Sample circles
+          for(const [key,item] of Object.entries(cal)){
+            if(item.type!=='province') continue;
+            const [px,py]=applyH(H_inv,item.board_x,item.board_y);
+            if(px<SR||py<SR||px>canvas.width-SR||py>canvas.height-SR) continue;
+            const s=newState[key];
+            const fc=s?.faction, pc=s?.player!=null?PLAYER_RANGES[s.player]?.col:null;
+            ctx.beginPath(); ctx.arc(px,py,SR,0,Math.PI*2);
+            ctx.strokeStyle=fc?FACTION_COL[fc]+'aa':'rgba(255,255,255,0.18)';
+            ctx.lineWidth=(isDebug?2.5:1.5)*R; ctx.stroke();
+            if(fc){ ctx.beginPath(); ctx.arc(px,py,SR,0,Math.PI*2); ctx.fillStyle=FACTION_COL[fc]+'33'; ctx.fill(); }
+            if(pc){ ctx.beginPath(); ctx.arc(px,py,7*R,0,Math.PI*2); ctx.fillStyle=pc; ctx.fill(); ctx.strokeStyle='white'; ctx.lineWidth=1.5*R; ctx.stroke(); }
+            ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.font=`bold ${9*R}px sans-serif`;
             ctx.textAlign='center'; ctx.textBaseline='top';
-            const lbl=`${item.id||key}${fc?' '+fc[0].toUpperCase():''}${s?.player!=null?' P'+(s.player+1):''}`;
-            ctx.fillText(lbl,px,py+SAMPLE_R+2*R);
-            // Show raw hit counts
-            if(s?.counts){
-              ctx.fillStyle='rgba(255,255,255,0.45)';
-              ctx.font=`${7.5*R}px sans-serif`;
-              ctx.fillText(`r${s.counts.red} b${s.counts.blue} w${s.counts.white}`,px,py+SAMPLE_R+13*R);
+            ctx.fillText(isDebug?`${key}${fc?' '+fc[0].toUpperCase():''}`:String(key),px,py+SR+2*R);
+            if(isDebug&&s?.counts){
+              ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font=`${7.5*R}px sans-serif`;
+              ctx.fillText(`r${s.counts.red} b${s.counts.blue} w${s.counts.white}`,px,py+SR+13*R);
             }
-          } else {
-            ctx.fillStyle='rgba(255,255,255,0.6)';
-            ctx.font=`bold ${9*R}px sans-serif`;
-            ctx.textAlign='center'; ctx.textBaseline='top';
-            ctx.fillText(String(item.id||key),px,py+SAMPLE_R+2*R);
+          }
+
+          // Box labels
+          for(const [,item] of Object.entries(cal)){
+            if(item.type!=='box') continue;
+            const [px,py]=applyH(H_inv,item.board_x,item.board_y);
+            if(px<0||py<0||px>canvas.width||py>canvas.height) continue;
+            ctx.beginPath(); ctx.rect(px-14*R,py-10*R,28*R,20*R);
+            ctx.strokeStyle='#c9a85099'; ctx.lineWidth=2*R; ctx.stroke();
+            ctx.fillStyle='rgba(201,168,80,0.08)'; ctx.fill();
+            ctx.fillStyle='#c9a850'; ctx.font=`${8*R}px sans-serif`;
+            ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText(item.name.replace(' Box',''),px,py);
+          }
+
+          // Probe crosshair
+          if(isDebug&&probe){
+            const {cx,cy}=probe;
+            ctx.strokeStyle='rgba(255,255,0,0.9)'; ctx.lineWidth=1.5*R;
+            ctx.beginPath(); ctx.moveTo(cx-18*R,cy); ctx.lineTo(cx+18*R,cy); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx,cy-18*R); ctx.lineTo(cx,cy+18*R); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx,cy,8*R,0,Math.PI*2);
+            ctx.fillStyle=`rgb(${probe.rgb?.[0]||0},${probe.rgb?.[1]||0},${probe.rgb?.[2]||0})`; ctx.fill();
+            ctx.strokeStyle='white'; ctx.lineWidth=2*R; ctx.stroke();
           }
         }
-
-        // ── Box indicators ─────────────────────────────────────────────────
-        for(const [key,item] of Object.entries(calData)){
-          if(item.type!=='box') continue;
-          const [px,py]=applyH(H_inv,item.board_x,item.board_y);
-          if(px<0||py<0||px>canvas.width||py>canvas.height) continue;
-          ctx.beginPath(); ctx.rect(px-14*R,py-10*R,28*R,20*R);
-          ctx.strokeStyle='#c9a85099'; ctx.lineWidth=2*R; ctx.stroke();
-          ctx.fillStyle='rgba(201,168,80,0.08)'; ctx.fill();
-          ctx.fillStyle='#c9a850'; ctx.font=`${8*R}px sans-serif`;
-          ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.fillText(item.name.replace(' Box',''),px,py);
-        }
-
-        // ── Debug: probe crosshair ─────────────────────────────────────────
-        if(isDebug&&probe){
-          const {cx,cy}=probe;
-          ctx.strokeStyle='rgba(255,255,0,0.9)'; ctx.lineWidth=1.5*R;
-          ctx.beginPath(); ctx.moveTo(cx-18*R,cy); ctx.lineTo(cx+18*R,cy); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(cx,cy-18*R); ctx.lineTo(cx,cy+18*R); ctx.stroke();
-          ctx.beginPath(); ctx.arc(cx,cy,8*R,0,Math.PI*2);
-          ctx.fillStyle=`rgb(${probe.rgb[0]},${probe.rgb[1]},${probe.rgb[2]})`; ctx.fill();
-          ctx.strokeStyle='white'; ctx.lineWidth=2*R; ctx.stroke();
-        }
-      }
-
-      } catch(err){ console.error('RAF loop error:',err); }
+      }catch(err){ console.error('RAF:',err); }
       rafRef.current=requestAnimationFrame(loop);
     };
     rafRef.current=requestAnimationFrame(loop);
-    return()=>{
-      cancelAnimationFrame(rafRef.current);
-      window.removeEventListener('resize',onResize);
-    };
+    return()=>cancelAnimationFrame(rafRef.current);
   },[phase,mTaps,postState,probe]);
 
-  // ── Tap handler ───────────────────────────────────────────────────────────────
+  // Tap handler
   const handleTap=useCallback((e)=>{
     e.preventDefault();
     const canvas=canvasRef.current; if(!canvas) return;
     const rect=canvas.getBoundingClientRect();
     const touch=e.touches?.[0]||e.changedTouches?.[0]||e;
-    const scaleX=canvas.width/rect.width, scaleY=canvas.height/rect.height;
-    const cx=(touch.clientX-rect.left)*scaleX, cy=(touch.clientY-rect.top)*scaleY;
+    const sx=canvas.width/rect.width, sy=canvas.height/rect.height;
+    const cx=(touch.clientX-rect.left)*sx, cy=(touch.clientY-rect.top)*sy;
 
     if(phase==='markers'){
       const next=[...mTaps,{cx,cy}];
@@ -486,216 +390,144 @@ function App(){
           const inv=invertH(H);
           if(inv){
             HRef.current=inv; H_fwd.current=H;
-            showToast('Board locked — point at board, capturing baseline…', 2500);
-            // Signal the animation loop to capture baseline on the next drawn frame
-            captureBaselineRef.current = inv; // store inv so loop can use it
+            showToast('Board locked — capturing baseline…', 2500);
+            captureBaselineRef.current=inv;
             setPhase('running');
-          }
-          else { showToast('Matrix error — try again'); setMTaps([]); }
+          } else { showToast('Matrix error — try again'); setMTaps([]); }
         } else { showToast('Homography failed — try again'); setMTaps([]); }
       }
       return;
     }
-
     if(phase==='running'&&debugRef.current){
-      // Colour probe on tap
       probeRef.current={cx,cy};
       setProbe(p=>p?{...p,cx,cy}:{cx,cy,h:0,s:0,v:0,label:null,rgb:[0,0,0]});
     }
   },[phase,mTaps]);
 
-  // ── Setup screen ──────────────────────────────────────────────────────────────
+  // ── Loading screen ─────────────────────────────────────────────────────────
   if(phase==='loading') return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#09090f',color:GOLD,...CIN,fontSize:'16px',letterSpacing:'2px'}}>Loading…</div>
   );
 
+  // ── Setup screen ───────────────────────────────────────────────────────────
   if(phase==='setup') return (
     <div style={{...GAR,minHeight:'100vh',background:'linear-gradient(160deg,#06060e,#0e0e20)',color:'#ddd0b8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'24px',gap:'18px',overflowY:'auto'}}>
       <div style={{textAlign:'center'}}>
         <div style={{...CIN,fontSize:'30px',color:GOLD,letterSpacing:'4px',fontWeight:700}}>LIBERTÉ</div>
         <div style={{...CIN,fontSize:'11px',color:'#6a6070',letterSpacing:'2px',marginTop:'5px'}}>CV PIPELINE</div>
       </div>
-
       <div style={{background:calib?'rgba(40,160,80,.1)':'rgba(192,64,64,.1)',border:`1px solid ${calib?'rgba(40,160,80,.3)':'rgba(192,64,64,.3)'}`,borderRadius:'8px',padding:'12px 16px',maxWidth:'380px',width:'100%',fontSize:'14px',color:calib?'#70c888':'#e07070',textAlign:'center'}}>
-        {calib ? `Calibration loaded — ${Object.values(calib).filter(x=>x.polygon).length}/33 polygons` : 'No calibration found — run the calibration tool first'}
+        {calib?`Calibration loaded — ${Object.values(calib).filter(x=>x.polygon).length}/33 polygons`:'No calibration found'}
       </div>
-
-      {!calib&&(
-        <div style={{maxWidth:'380px',width:'100%'}}>
-          {!pasteMode
-            ? <Btn full col='#6080c0' onClick={()=>setPasteMode(true)}>Paste Calibration JSON</Btn>
-            : <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-                <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)}
-                  placeholder='Paste calibration JSON here…'
-                  style={{width:'100%',height:'120px',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'6px',padding:'10px',color:'#e0d0b8',...GAR,fontSize:'13px',resize:'none'}}/>
-                <Btn full onClick={()=>{
-                  try{
-                    const parsed=JSON.parse(pasteText);
-                    setCalib(parsed); calibRef.current=parsed;
-                    window.storage.set('liberte_cal',pasteText);
-                    setPasteMode(false); showToast('Calibration loaded!');
-                  } catch(e){ showToast('Invalid JSON'); }
-                }}>Load</Btn>
-              </div>
-          }
-        </div>
-      )}
-
+      {!calib&&<div style={{maxWidth:'380px',width:'100%'}}>
+        {!pasteMode
+          ?<button onClick={()=>setPasteMode(true)} style={{width:'100%',background:'rgba(96,128,192,.14)',border:'1px solid rgba(96,128,192,.45)',borderRadius:'6px',padding:'11px',color:'#6080c0',...CIN,fontSize:'11px',letterSpacing:'1px'}}>Paste Calibration JSON</button>
+          :<div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            <textarea value={pasteText} onChange={e=>setPasteText(e.target.value)} placeholder='Paste calibration JSON…'
+              style={{width:'100%',height:'120px',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'6px',padding:'10px',color:'#e0d0b8',...GAR,fontSize:'13px',resize:'none'}}/>
+            <button onClick={()=>{
+              try{
+                const neg=negateCalib(JSON.parse(pasteText));
+                setCalib(neg); calibRef.current=neg;
+                window.storage.set('liberte_cal',pasteText);
+                setPasteMode(false); showToast('Calibration loaded!');
+              }catch(e){showToast('Invalid JSON');}
+            }} style={{background:'rgba(40,160,80,.14)',border:'1px solid rgba(40,160,80,.4)',borderRadius:'6px',padding:'10px',color:'#70c888',...CIN,fontSize:'11px',letterSpacing:'1px'}}>Load</button>
+          </div>
+        }
+      </div>}
       <div style={{maxWidth:'380px',width:'100%'}}>
-        <div style={{...CIN,fontSize:'10px',color:'#9080b0',letterSpacing:'1.5px',marginBottom:'8px'}}>RELAY SERVER URL (optional)</div>
-        <input value={serverUrl} onChange={e=>setServerUrl(e.target.value)}
-          placeholder='http://192.168.4.49:3001'
+        <div style={{...CIN,fontSize:'10px',color:'#9080b0',letterSpacing:'1.5px',marginBottom:'8px'}}>RELAY URL (optional)</div>
+        <input value={serverUrl} onChange={e=>setServerUrl(e.target.value)} placeholder='http://192.168.4.49:3001'
           style={{width:'100%',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.12)',borderRadius:'5px',padding:'9px 12px',color:'#e0d0b8',...GAR,fontSize:'15px'}}/>
-        <div style={{fontSize:'12px',color:'#5a5868',marginTop:'5px'}}>Leave blank to run standalone</div>
       </div>
-
-      <div style={{maxWidth:'380px',width:'100%',display:'flex',flexDirection:'column',gap:'8px'}}>
-        <Btn full disabled={!calib} onClick={()=>{setMTaps([]);setPhase('markers');}}>Start Session</Btn>
-      </div>
+      <button disabled={!calib} onClick={()=>{setMTaps([]);setPhase('markers');}}
+        style={{background:calib?`rgba(201,168,80,.22)`:'rgba(201,168,80,.06)',border:`1px solid ${calib?'rgba(201,168,80,.7)':'rgba(201,168,80,.2)'}`,borderRadius:'8px',padding:'13px 40px',color:calib?GOLD:'rgba(201,168,80,.3)',...CIN,fontSize:'12px',letterSpacing:'2px',width:'100%',maxWidth:'380px'}}>
+        Start Session
+      </button>
       {toast&&<div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(0,0,0,.9)',border:`1px solid ${GOLD}66`,borderRadius:'8px',padding:'12px 24px',color:GOLD,...CIN,fontSize:'12px',letterSpacing:'1px'}}>{toast}</div>}
     </div>
   );
 
-  // ── Camera view ───────────────────────────────────────────────────────────────
+  // ── Camera view (markers + running) ───────────────────────────────────────
   const isMarkers=phase==='markers';
-  const pCol=isMarkers?GOLD:'#50c878';
-  const pTxt=isMarkers?('Tap marker '+PROMPTS[mTaps.length]):'Detection running';
-  const sTxt=isMarkers?`${mTaps.length}/4 markers tapped`
-    :`${Object.values(gameState).filter(s=>s.faction).length} provinces active${hasBaseline?'':' — no baseline (re-align to capture)'}`;
+  const pTxt=isMarkers?`Tap marker ${PROMPTS[Math.min(mTaps.length,3)]}`:'Detection running';
+  const sTxt=isMarkers?`${mTaps.length}/4 markers tapped`:`${Object.values(gameState).filter(s=>s.faction).length} provinces active${!hasBaseline?' — no baseline':''}`;
 
   return (
     <div style={{position:'relative',width:'100vw',height:'100vh',background:'#000',overflow:'hidden'}}>
-      {/* opacity:0.001 not 0 — iOS pauses truly invisible video elements */}
-      <video ref={videoRef} playsInline autoPlay muted
-        style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',opacity:0.001}}/>
-      <canvas ref={canvasRef}
-        style={{position:'absolute',inset:0,width:'100%',height:'100%',touchAction:'none'}}
+      {/* opacity:0.001 keeps iOS from pausing the stream (opacity:0 triggers browser optimisation) */}
+      <video ref={videoRef} playsInline autoPlay muted style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',opacity:0.001}}/>
+      <canvas ref={canvasRef} style={{position:'absolute',inset:0,width:'100%',height:'100%',touchAction:'none'}}
         onTouchEnd={handleTap} onClick={handleTap}/>
 
       {camError&&<div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.85)',color:'#e04040',padding:'24px',textAlign:'center',...GAR,fontSize:'16px'}}>{camError}</div>}
 
-      {/* Top status bar */}
-      <div style={{position:'absolute',top:14,left:12,right:12,pointerEvents:'none'}}>
-        <div style={{background:'rgba(0,0,0,.75)',backdropFilter:'blur(8px)',borderRadius:'10px',border:`1px solid ${pCol}55`,padding:'10px 14px'}}>
-          <div style={{...CIN,fontSize:'12px',color:pCol,letterSpacing:'1px',marginBottom:'2px'}}>{pTxt}</div>
+      {/* Status bar */}
+      <div style={{position:'absolute',top:14,left:12,right:120,pointerEvents:'none'}}>
+        <div style={{background:'rgba(0,0,0,.75)',backdropFilter:'blur(8px)',borderRadius:'10px',border:`1px solid ${isMarkers?GOLD+'55':'#50c87855'}`,padding:'10px 14px'}}>
+          <div style={{...CIN,fontSize:'12px',color:isMarkers?GOLD:'#50c878',letterSpacing:'1px',marginBottom:'2px'}}>{pTxt}</div>
           <div style={{fontSize:'13px',color:'rgba(255,255,255,.5)',...GAR}}>{sTxt}
-            {debugMode&&phase==='running'&&<span style={{color:'#f0c030',marginLeft:'10px',fontSize:'12px'}}> ● DEBUG — tap to probe colour</span>}
+            {debugMode&&phase==='running'&&<span style={{color:'#f0c030',marginLeft:'10px',fontSize:'12px'}}> ● tap to probe</span>}
           </div>
         </div>
       </div>
 
-      {/* Bottom game state panel */}
-      {phase==='running'&&(
-        <div style={{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,.85)',backdropFilter:'blur(8px)',borderTop:'1px solid rgba(255,255,255,.08)',padding:'10px 12px'}}>
-          <div style={{display:'flex',gap:'12px',marginBottom:'8px',alignItems:'center'}}>
-            {['red','blue','white'].map(f=>{
-              const count=Object.values(gameState).filter(s=>s.faction===f).length;
-              return (
-                <div key={f} style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                  <div style={{width:'9px',height:'9px',borderRadius:'50%',background:FACTION_COL[f]}}/>
-                  <span style={{...CIN,color:FACTION_COL[f],fontSize:'13px'}}>{count}</span>
-                  <span style={{fontSize:'11px',color:'#6a6070'}}>{f==='red'?'Rad':f==='blue'?'Mod':'Roy'}</span>
-                </div>
-              );
-            })}
-            {serverUrl&&<span style={{marginLeft:'auto',fontSize:'10px',color:'#5a5870',...CIN}}>{lastPost?'↑ '+lastPost:'Connecting…'}</span>}
-          </div>
+      {/* Bottom panel */}
+      {phase==='running'&&<div style={{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,.85)',backdropFilter:'blur(8px)',borderTop:'1px solid rgba(255,255,255,.08)',padding:'10px 12px'}}>
+        <div style={{display:'flex',gap:'12px',marginBottom:'8px',alignItems:'center'}}>
+          {['red','blue','white'].map(f=>{
+            const n=Object.values(gameState).filter(s=>s.faction===f).length;
+            return <div key={f} style={{display:'flex',alignItems:'center',gap:'5px'}}>
+              <div style={{width:'9px',height:'9px',borderRadius:'50%',background:FACTION_COL[f]}}/>
+              <span style={{...CIN,color:FACTION_COL[f],fontSize:'13px'}}>{n}</span>
+              <span style={{fontSize:'11px',color:'#6a6070'}}>{f==='red'?'Rad':f==='blue'?'Mod':'Roy'}</span>
+            </div>;
+          })}
+          {serverUrl&&<span style={{marginLeft:'auto',fontSize:'10px',color:'#5a5870',...CIN}}>{lastPost?'↑ '+lastPost:'—'}</span>}
+        </div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:'3px'}}>
+          {Array.from({length:27},(_,i)=>{
+            const key=String(i+1),s=gameState[key];
+            const fc=s?.faction,pc=s?.player!=null?PLAYER_RANGES[s.player]?.col:null;
+            return <div key={key} style={{width:'26px',height:'26px',borderRadius:'4px',background:fc?FACTION_COL[fc]+'44':'rgba(255,255,255,.05)',border:`1px solid ${fc?FACTION_COL[fc]+'77':'rgba(255,255,255,.1)'}`,display:'flex',alignItems:'center',justifyContent:'center',position:'relative'}}>
+              <span style={{...CIN,fontSize:'8px',color:fc?'white':'#4a4858'}}>{i+1}</span>
+              {pc&&<div style={{position:'absolute',top:2,right:2,width:'5px',height:'5px',borderRadius:'50%',background:pc}}/>}
+            </div>;
+          })}
+        </div>
+      </div>}
 
-          {/* Province grid */}
-          <div style={{display:'flex',flexWrap:'wrap',gap:'3px'}}>
-            {Array.from({length:27},(_,i)=>{
-              const key=String(i+1), s=gameState[key];
-              const fc=s?.faction, pc=s?.player!=null?PLAYER_RANGES[s.player]?.col:null;
-              return (
-                <div key={key} style={{
-                  width:debugMode?'34px':'26px', height:debugMode?'34px':'26px',
-                  borderRadius:'4px',
-                  background:fc?FACTION_COL[fc]+'44':'rgba(255,255,255,.05)',
-                  border:`1px solid ${fc?FACTION_COL[fc]+'77':'rgba(255,255,255,.1)'}`,
-                  display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-                  position:'relative',gap:'1px',
-                }}>
-                  <span style={{...CIN,fontSize:debugMode?'8px':'8px',color:fc?'white':'#4a4858'}}>{i+1}</span>
-                  {debugMode&&fc&&<span style={{fontSize:'7px',color:FACTION_COL[fc],fontWeight:'bold'}}>{fc[0].toUpperCase()}</span>}
-                  {pc&&<div style={{position:'absolute',top:2,right:2,width:'6px',height:'6px',borderRadius:'50%',background:pc}}/>}
-                  {debugMode&&s?.player!=null&&<span style={{fontSize:'7px',color:pc||'#888'}}>P{s.player+1}</span>}
-                </div>
-              );
-            })}
+      {/* Probe panel */}
+      {debugMode&&probe&&probe.label!==undefined&&<div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(0,0,0,.92)',border:'1px solid rgba(255,255,0,.5)',borderRadius:'10px',padding:'14px 20px',minWidth:'200px',pointerEvents:'none',zIndex:10}}>
+        <div style={{...CIN,fontSize:'10px',color:'#f0c030',letterSpacing:'2px',marginBottom:'8px'}}>COLOUR PROBE</div>
+        <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'10px'}}>
+          <div style={{width:'36px',height:'36px',borderRadius:'6px',background:`rgb(${probe.rgb?.[0]||0},${probe.rgb?.[1]||0},${probe.rgb?.[2]||0})`,border:'1px solid rgba(255,255,255,.3)'}}/>
+          <div style={{...GAR,fontSize:'15px',lineHeight:1.6}}>
+            <div>H: <span style={{color:'#f0c030'}}>{probe.h}°</span></div>
+            <div>S: <span style={{color:'#f0c030'}}>{probe.s}%</span></div>
+            <div>V: <span style={{color:'#f0c030'}}>{probe.v}%</span></div>
           </div>
         </div>
-      )}
-
-      {/* Debug probe panel */}
-      {debugMode&&probe&&probe.label!==undefined&&(
-        <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
-          background:'rgba(0,0,0,.92)',border:'1px solid rgba(255,255,0,.5)',borderRadius:'10px',
-          padding:'14px 20px',minWidth:'220px',pointerEvents:'none',zIndex:10}}>
-          <div style={{...CIN,fontSize:'10px',color:'#f0c030',letterSpacing:'2px',marginBottom:'8px'}}>COLOUR PROBE</div>
-          <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'10px'}}>
-            <div style={{width:'36px',height:'36px',borderRadius:'6px',background:`rgb(${probe.rgb?.[0]||0},${probe.rgb?.[1]||0},${probe.rgb?.[2]||0})`,border:'1px solid rgba(255,255,255,.3)'}}/>
-            <div style={{...GAR,fontSize:'15px',lineHeight:1.6}}>
-              <div>H: <span style={{color:'#f0c030'}}>{probe.h}°</span></div>
-              <div>S: <span style={{color:'#f0c030'}}>{probe.s}%</span></div>
-              <div>V: <span style={{color:'#f0c030'}}>{probe.v}%</span></div>
-            </div>
-          </div>
-          <div style={{borderTop:'1px solid rgba(255,255,255,.1)',paddingTop:'8px',...CIN,fontSize:'11px'}}>
-            {probe.label
-              ? <span style={{color: probe.label.startsWith('player_')
-                  ? (PLAYER_RANGES[parseInt(probe.label.split('_')[1])]?.col||'#fff')
-                  : probe.label==='white'?'#a0a8b0':probe.label==='red'?'#c0392b':'#2471a3'}}>
-                  → {probe.label.startsWith('player_')
-                    ? 'Player '+(parseInt(probe.label.split('_')[1])+1)
-                    : probe.label.charAt(0).toUpperCase()+probe.label.slice(1)}
-                </span>
-              : <span style={{color:'#666'}}>→ unclassified</span>
-            }
-          </div>
+        <div style={{borderTop:'1px solid rgba(255,255,255,.1)',paddingTop:'8px',...CIN,fontSize:'11px'}}>
+          {probe.label?<span style={{color:probe.label.startsWith('player_')?PLAYER_RANGES[parseInt(probe.label.split('_')[1])]?.col||'#fff':FACTION_COL[probe.label]||'#fff'}}>→ {probe.label.startsWith('player_')?'Player '+(parseInt(probe.label.split('_')[1])+1):probe.label.charAt(0).toUpperCase()+probe.label.slice(1)}</span>
+          :<span style={{color:'#666'}}>→ unclassified</span>}
         </div>
-      )}
+      </div>}
 
       {/* Controls */}
       <div style={{position:'absolute',top:14,right:12,display:'flex',flexDirection:'column',gap:'6px',alignItems:'flex-end'}}>
-        {isMarkers&&mTaps.length>0&&(
-          <button onClick={()=>setMTaps(t=>t.slice(0,-1))}
-            style={{background:'rgba(0,0,0,.7)',border:'1px solid rgba(255,255,255,.2)',borderRadius:'6px',padding:'7px 12px',color:'#ddd',...CIN,fontSize:'9px',letterSpacing:'1px'}}>
-            Undo
-          </button>
-        )}
-        {phase==='running'&&(<>
-          <button onClick={()=>setDebugMode(d=>!d)}
-            style={{background:debugMode?'rgba(240,192,48,.18)':'rgba(0,0,0,.7)',
-              border:`1px solid ${debugMode?'rgba(240,192,48,.7)':'rgba(255,255,255,.2)'}`,
-              borderRadius:'6px',padding:'7px 12px',
-              color:debugMode?'#f0c030':'#888',...CIN,fontSize:'9px',letterSpacing:'1px'}}>
-            {debugMode?'● Debug':'Debug'}
-          </button>
-          {debugMode&&probe&&(
-            <button onClick={()=>setProbe(null)}
-              style={{background:'rgba(0,0,0,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'7px 12px',color:'#666',...CIN,fontSize:'9px',letterSpacing:'1px'}}>
-              Clear Probe
-            </button>
-          )}
-          <button onClick={()=>{
-              if(HRef.current){
-                captureBaselineRef.current=HRef.current;
-                setHasBaseline(false);
-                showToast('Recapturing baseline…');
-              }
-            }}
+        {isMarkers&&mTaps.length>0&&<button onClick={()=>setMTaps(t=>t.slice(0,-1))} style={{background:'rgba(0,0,0,.7)',border:'1px solid rgba(255,255,255,.2)',borderRadius:'6px',padding:'7px 12px',color:'#ddd',...CIN,fontSize:'9px',letterSpacing:'1px'}}>Undo</button>}
+        {phase==='running'&&<>
+          <button onClick={()=>setDebugMode(d=>!d)} style={{background:debugMode?'rgba(240,192,48,.18)':'rgba(0,0,0,.7)',border:`1px solid ${debugMode?'rgba(240,192,48,.7)':'rgba(255,255,255,.2)'}`,borderRadius:'6px',padding:'7px 12px',color:debugMode?'#f0c030':'#888',...CIN,fontSize:'9px',letterSpacing:'1px'}}>{debugMode?'● Debug':'Debug'}</button>
+          {debugMode&&probe&&<button onClick={()=>setProbe(null)} style={{background:'rgba(0,0,0,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'7px 12px',color:'#666',...CIN,fontSize:'9px',letterSpacing:'1px'}}>Clear</button>}
+          <button onClick={()=>{ if(HRef.current){captureBaselineRef.current=HRef.current;setHasBaseline(false);showToast('Recapturing…');} }}
             style={{background:hasBaseline?'rgba(80,200,120,.12)':'rgba(200,80,80,.12)',border:`1px solid ${hasBaseline?'rgba(80,200,120,.4)':'rgba(200,80,80,.4)'}`,borderRadius:'6px',padding:'7px 12px',color:hasBaseline?'#50c878':'#e08080',...CIN,fontSize:'9px',letterSpacing:'1px'}}>
-            {hasBaseline?'✓ Baseline':'Recapture'}
+            {hasBaseline?'✓ Baseline':'Baseline'}
           </button>
-          <button onClick={()=>{setPhase('markers');setMTaps([]);HRef.current=null;H_fwd.current=null;baselineRef.current=null;setHasBaseline(false);}}
-            style={{background:'rgba(0,0,0,.7)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'6px',padding:'7px 12px',color:'#888',...CIN,fontSize:'9px',letterSpacing:'1px'}}>
-            Re-align
-          </button>
-        </>)}
-        <button onClick={()=>{setPhase('setup');setMTaps([]);setProbe(null);}}
-          style={{background:'rgba(0,0,0,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'7px 12px',color:'#666',...CIN,fontSize:'9px',letterSpacing:'1px'}}>
-          Settings
-        </button>
+          <button onClick={()=>{setPhase('markers');setMTaps([]);HRef.current=null;H_fwd.current=null;baselineRef.current=null;setHasBaseline(false);}} style={{background:'rgba(0,0,0,.7)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'6px',padding:'7px 12px',color:'#888',...CIN,fontSize:'9px',letterSpacing:'1px'}}>Re-align</button>
+        </>}
+        <button onClick={()=>{setPhase('setup');setProbe(null);}} style={{background:'rgba(0,0,0,.7)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'6px',padding:'7px 12px',color:'#666',...CIN,fontSize:'9px',letterSpacing:'1px'}}>Settings</button>
       </div>
 
       {toast&&<div style={{position:'absolute',top:'45%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(0,0,0,.88)',border:`1px solid ${GOLD}66`,borderRadius:'8px',padding:'12px 24px',color:GOLD,...CIN,fontSize:'12px',letterSpacing:'1px',pointerEvents:'none',textAlign:'center',whiteSpace:'nowrap'}}>{toast}</div>}
