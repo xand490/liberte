@@ -263,16 +263,19 @@ function App(){
       v.srcObject=stream;
       // iOS sometimes pauses the video — restart it automatically
       v.onpause=()=>{ try{ v.play(); } catch(e){} };
+      // Size canvas to screen immediately so taps + drawing work before video metadata arrives
+      const c=canvasRef.current;
+      if(c){
+        c.width  = window.innerWidth  * window.devicePixelRatio;
+        c.height = window.innerHeight * window.devicePixelRatio;
+        c.style.width='100%'; c.style.height='100%';
+      }
       v.onloadedmetadata=()=>{
         v.play();
         const c=canvasRef.current; if(!c) return;
-        // Use the camera's native resolution so imageData is full quality
+        // Upgrade to native camera resolution once known
         c.width  = v.videoWidth  || 1280;
         c.height = v.videoHeight || 720;
-        // Scale canvas display to fill the container via CSS
-        c.style.width  = '100%';
-        c.style.height = '100%';
-        c.style.objectFit = 'cover';
       };
     } catch(e){ setCamError('Camera access denied.'); }
   },[]);
@@ -459,7 +462,10 @@ function App(){
       rafRef.current=requestAnimationFrame(loop);
     };
     rafRef.current=requestAnimationFrame(loop);
-    return()=>cancelAnimationFrame(rafRef.current);
+    return()=>{
+      cancelAnimationFrame(rafRef.current);
+      window.removeEventListener('resize',onResize);
+    };
   },[phase,mTaps,postState,probe]);
 
   // ── Tap handler ───────────────────────────────────────────────────────────────
