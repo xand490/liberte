@@ -2,52 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
   <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <title>Liberté — Board Calibration</title>
-
-  <!-- React + ReactDOM -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
-  <!-- Babel standalone (transforms JSX in browser) -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- mathjs (homography computation) -->
-  <script src="https://unpkg.com/mathjs@12/lib/browser/math.js"></script>
-
+  <title>Liberté — Calibration</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/mathjs@12/lib/browser/math.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { height: 100%; overflow: hidden; background: #000; touch-action: none; }
-    button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body,#root{height:100%;overflow:hidden;background:#000;touch-action:none}
+    button{cursor:pointer;-webkit-tap-highlight-color:transparent}
   </style>
 </head>
 <body>
-  <div id="root"></div>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback } = React;
+const math = window.math;
 
-  <script type="text/babel" data-presets="react">
-    const { useState, useEffect, useRef, useCallback } = React;
-    const math = window.math;  // mathjs from CDN
+// Storage polyfill (works outside claude.ai)
+if (!window.storage) {
+  const _s = {};
+  window.storage = {
+    set: async (k,v) => { _s[k]=v; return {key:k,value:v}; },
+    get: async (k)   => _s[k]!==undefined ? {key:k,value:_s[k]} : null,
+  };
+}
 
-    // Storage polyfill for outside claude.ai environment
-    if (!window.storage) {
-      const _store = {};
-      window.storage = {
-        set: async (k, v) => { _store[k] = v; return {key:k,value:v}; },
-        get: async (k)    => { return _store[k] !== undefined ? {key:k,value:_store[k]} : null; },
-      };
-    }
-
-
-    // mathjs is available as window.math from the CDN script above
-
-
-// (fonts loaded via <link> tag)
-
-// ── Province + box data ────────────────────────────────────────────────────────
+// ── Data ──────────────────────────────────────────────────────────────────────
 const PROVINCES = [
   {id:1, n:'Normandie',     r:1,fdl:true, vp:0,par:false},
   {id:2, n:'Artois',        r:1,fdl:true, vp:0,par:false},
@@ -56,10 +41,10 @@ const PROVINCES = [
   {id:5, n:'Flandres',      r:1,fdl:true, vp:0,par:false},
   {id:6, n:'Lorraine',      r:2,fdl:true, vp:0,par:false},
   {id:7, n:'Alsace',        r:2,fdl:true, vp:1,par:false},
-  {id:8, n:'Franche-Comté', r:2,fdl:false,vp:0,par:false},
+  {id:8, n:'Franche-Comte', r:2,fdl:false,vp:0,par:false},
   {id:9, n:'Bourgogne',     r:2,fdl:false,vp:0,par:false},
-  {id:10,n:'Orléanais',     r:3,fdl:false,vp:0,par:false},
-  {id:11,n:'Île-de-France', r:3,fdl:false,vp:2,par:true},
+  {id:10,n:'Orleanais',     r:3,fdl:false,vp:0,par:false},
+  {id:11,n:'Ile-de-France', r:3,fdl:false,vp:2,par:true},
   {id:12,n:'Berry',         r:3,fdl:false,vp:0,par:false},
   {id:13,n:'Bretagne',      r:4,fdl:true, vp:0,par:false},
   {id:14,n:'Maine',         r:4,fdl:false,vp:0,par:false},
@@ -69,7 +54,7 @@ const PROVINCES = [
   {id:18,n:'Limousin',      r:5,fdl:false,vp:0,par:false},
   {id:19,n:'Auvergne',      r:5,fdl:false,vp:0,par:false},
   {id:20,n:'Lyonnais',      r:5,fdl:false,vp:1,par:false},
-  {id:21,n:'Dauphiné',      r:5,fdl:true, vp:0,par:false},
+  {id:21,n:'Dauphine',      r:5,fdl:true, vp:0,par:false},
   {id:22,n:'Provence',      r:5,fdl:true, vp:0,par:false},
   {id:23,n:'Guyenne',       r:6,fdl:true, vp:0,par:false},
   {id:24,n:'Gascogne',      r:6,fdl:true, vp:0,par:false},
@@ -77,456 +62,327 @@ const PROVINCES = [
   {id:26,n:'Languedoc',     r:6,fdl:false,vp:0,par:false},
   {id:27,n:'Roussillon',    r:6,fdl:true, vp:0,par:false},
 ];
-
 const BOXES = [
-  {id:'battle',  n:'Battle Box',      type:'box'},
-  {id:'govt',    n:'Government Box',  type:'box'},
-  {id:'turn_1',  n:'Turn Box 1',      type:'box'},
-  {id:'turn_2',  n:'Turn Box 2',      type:'box'},
-  {id:'turn_3',  n:'Turn Box 3',      type:'box'},
-  {id:'turn_4',  n:'Turn Box 4',      type:'box'},
+  {id:'battle', n:'Battle Box',     type:'box'},
+  {id:'govt',   n:'Government Box', type:'box'},
+  {id:'turn_1', n:'Turn Box 1',     type:'box'},
+  {id:'turn_2', n:'Turn Box 2',     type:'box'},
+  {id:'turn_3', n:'Turn Box 3',     type:'box'},
+  {id:'turn_4', n:'Turn Box 4',     type:'box'},
 ];
-
 const ALL_ITEMS = [
-  ...PROVINCES.map(p => ({...p, type:'province'})),
+  ...PROVINCES.map(p=>({...p,type:'province'})),
   ...BOXES,
 ];
-
-const REGION_COLOURS = {
-  1:'#c07818', 2:'#14906a', 3:'#b87a10',
-  4:'#18980e', 5:'#7832c0', 6:'#c03010',
-};
-
-// ── Homography math ────────────────────────────────────────────────────────────
-// Compute 3×3 homography from 4 point correspondences.
-// src: 4× camera [x,y], dst: 4× board-normalised [x,y]
-function computeH(src, dst) {
-  const A = [], b = [];
-  for (let i = 0; i < 4; i++) {
-    const [x, y] = src[i], [xp, yp] = dst[i];
-    A.push([-x,-y,-1, 0, 0, 0, xp*x, xp*y]);  b.push(xp);
-    A.push([ 0, 0, 0,-x,-y,-1, yp*x, yp*y]);  b.push(yp);
-  }
-  try {
-    const h = math.lusolve(A, b).flat();
-    return [[h[0],h[1],h[2]],[h[3],h[4],h[5]],[h[6],h[7],1]];
-  } catch { return null; }
-}
-
-function applyH(H, x, y) {
-  const w = H[2][0]*x + H[2][1]*y + H[2][2];
-  return [(H[0][0]*x+H[0][1]*y+H[0][2])/w, (H[1][0]*x+H[1][1]*y+H[1][2])/w];
-}
-
-// ── Storage helpers ────────────────────────────────────────────────────────────
-async function saveCalibration(data) {
-  try { await window.storage.set('liberte_cal', JSON.stringify(data)); } catch {}
-}
-async function loadCalibration() {
-  try {
-    const r = await window.storage.get('liberte_cal');
-    return r ? JSON.parse(r.value) : null;
-  } catch { return null; }
-}
-
-// ── Colours & shared styles ────────────────────────────────────────────────────
+const RGN_COL = {1:'#c07818',2:'#14906a',3:'#b87a10',4:'#18980e',5:'#7832c0',6:'#c03010'};
 const GOLD = '#c9a850';
 const CIN  = {fontFamily:"'Cinzel',serif"};
 const GAR  = {fontFamily:"'EB Garamond',Georgia,serif"};
 
-function Btn({onClick, children, col=GOLD, full=false, sm=false}) {
+// ── Homography ────────────────────────────────────────────────────────────────
+function computeH(srcPts, dstPts) {
+  const A = [], b = [];
+  for (let i=0;i<4;i++) {
+    const [x,y]=srcPts[i],[xp,yp]=dstPts[i];
+    A.push([-x,-y,-1,0,0,0,xp*x,xp*y]); b.push(xp);
+    A.push([0,0,0,-x,-y,-1,yp*x,yp*y]); b.push(yp);
+  }
+  try {
+    const h = math.lusolve(A,b).flat();
+    return [[h[0],h[1],h[2]],[h[3],h[4],h[5]],[h[6],h[7],1]];
+  } catch(e) { return null; }
+}
+function applyH(H,x,y) {
+  const w = H[2][0]*x+H[2][1]*y+H[2][2];
+  return [(H[0][0]*x+H[0][1]*y+H[0][2])/w,(H[1][0]*x+H[1][1]*y+H[1][2])/w];
+}
+
+// ── Storage ───────────────────────────────────────────────────────────────────
+async function saveCal(data) {
+  try { await window.storage.set('liberte_cal',JSON.stringify(data)); } catch(e){}
+}
+async function loadCal() {
+  try { const r=await window.storage.get('liberte_cal'); return r?JSON.parse(r.value):null; }
+  catch(e){ return null; }
+}
+
+// ── Shared button ─────────────────────────────────────────────────────────────
+function Btn({onClick,children,col=GOLD,full=false,sm=false,disabled=false}) {
   return (
-    <button onClick={onClick} style={{
-      background:`${col}22`, border:`1px solid ${col}88`,
-      borderRadius:'6px', padding:sm?'8px 16px':'12px 24px',
-      color:col, ...CIN, fontSize:sm?'11px':'12px', letterSpacing:'1px',
-      width:full?'100%':'auto', transition:'all .15s',
-      display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'6px',
+    <button disabled={disabled} onClick={onClick} style={{
+      background:`${col}22`,border:`1px solid ${col}${disabled?'33':'88'}`,
+      borderRadius:'6px',padding:sm?'8px 16px':'12px 24px',color:disabled?col+'55':col,
+      ...CIN,fontSize:sm?'11px':'12px',letterSpacing:'1px',
+      width:full?'100%':'auto',transition:'all .15s',
+      display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'6px',
     }}>{children}</button>
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
-export default function Calibration() {
+// ── Main app ──────────────────────────────────────────────────────────────────
+function App() {
   const videoRef  = useRef(null);
   const canvasRef = useRef(null);
   const rafRef    = useRef(null);
+  const streamRef = useRef(null);
 
-  const [phase,       setPhase]       = useState('loading'); // loading|intro|markers|mapping|review|export
-  const [camError,    setCamError]    = useState(null);
-  const [markerTaps,  setMarkerTaps]  = useState([]);        // [{cx,cy}] ×4
-  const [H,           setH]           = useState(null);      // homography matrix
-  const [mapped,      setMapped]      = useState({});        // id→{bx,by,cx,cy,...item}
-  const [currentIdx,  setCurrentIdx]  = useState(0);
-  const [retapping,   setRetapping]   = useState(null);      // id being re-tapped
-  const [toast,       setToast]       = useState(null);
+  const [phase,      setPhase]      = useState('loading');
+  const [camError,   setCamError]   = useState(null);
+  const [mTaps,      setMTaps]      = useState([]);   // marker taps [{cx,cy}]
+  const [H,          setH]          = useState(null);
+  const [mapped,     setMapped]     = useState({});
+  const [curIdx,     setCurIdx]     = useState(0);
+  const [retap,      setRetap]      = useState(null);
+  const [toast,      setToast]      = useState(null);
 
-  const showToast = (msg, dur=2000) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), dur);
-  };
+  const showToast = (msg,dur=2000) => { setToast(msg); setTimeout(()=>setToast(null),dur); };
 
-  // ── Load existing calibration ────────────────────────────────────────────────
-  useEffect(() => {
-    loadCalibration().then(saved => {
-      if (saved && Object.keys(saved).length > 0) {
-        setMapped(saved);
-      }
+  // Load saved calibration
+  useEffect(()=>{
+    loadCal().then(saved=>{
+      if (saved && Object.keys(saved).length>0) setMapped(saved);
       setPhase('intro');
     });
-  }, []);
+  },[]);
 
-  // ── Camera ───────────────────────────────────────────────────────────────────
-  const startCamera = useCallback(async () => {
+  // Start camera
+  const startCam = useCallback(async ()=>{
     try {
+      if (streamRef.current) streamRef.current.getTracks().forEach(t=>t.stop());
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode:'environment', width:{ideal:1920}, height:{ideal:1080} },
-        audio: false,
+        video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},audio:false
       });
+      streamRef.current = stream;
       const v = videoRef.current;
       if (!v) return;
       v.srcObject = stream;
-      await v.play();
-      // Sync canvas to video native resolution
-      const sync = () => {
-        if (canvasRef.current && v.videoWidth) {
-          canvasRef.current.width  = v.videoWidth;
-          canvasRef.current.height = v.videoHeight;
+      v.onloadedmetadata = ()=>{
+        v.play();
+        if (canvasRef.current) {
+          canvasRef.current.width  = v.videoWidth  || 1280;
+          canvasRef.current.height = v.videoHeight || 720;
         }
       };
-      v.addEventListener('loadedmetadata', sync);
-      sync();
     } catch(e) {
-      setCamError('Camera permission denied. Please allow camera access and reload.');
+      setCamError('Camera access denied — please allow camera permission and reload.');
     }
-  }, []);
+  },[]);
 
-  // ── Draw overlay on canvas each frame ────────────────────────────────────────
-  const drawOverlay = useCallback(() => {
-    const canvas = canvasRef.current;
-    const video  = videoRef.current;
-    if (!canvas || !video || !video.videoWidth) { rafRef.current = requestAnimationFrame(drawOverlay); return; }
+  // Canvas draw loop
+  useEffect(()=>{
+    const draw = ()=>{
+      const canvas = canvasRef.current;
+      const video  = videoRef.current;
+      if (!canvas||!video) { rafRef.current=requestAnimationFrame(draw); return; }
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const R = canvas.width/1000;
 
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Marker tap dots
+      const labels=['0','1','2','3'];
+      mTaps.forEach(({cx,cy},i)=>{
+        ctx.beginPath(); ctx.arc(cx,cy,18*R,0,Math.PI*2);
+        ctx.fillStyle=GOLD; ctx.fill();
+        ctx.strokeStyle='#111'; ctx.lineWidth=3*R; ctx.stroke();
+        ctx.fillStyle='#111'; ctx.font=`bold ${16*R}px sans-serif`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(labels[i],cx,cy);
+      });
 
-    const r = canvas.width / 1000; // scale relative factor
+      // Mapped province dots
+      Object.values(mapped).forEach(item=>{
+        const col = item.type==='box'?'#60aaff':(RGN_COL[item.r]||'#aaa');
+        ctx.beginPath(); ctx.arc(item.cx,item.cy,12*R,0,Math.PI*2);
+        ctx.fillStyle=col+'cc'; ctx.fill();
+        ctx.strokeStyle='#fff'; ctx.lineWidth=2*R; ctx.stroke();
+        ctx.fillStyle='#fff'; ctx.font=`bold ${10*R}px sans-serif`;
+        ctx.textAlign='center'; ctx.textBaseline='bottom';
+        ctx.fillText(item.n.substring(0,8),item.cx,item.cy-14*R);
+      });
 
-    // ── Draw marker taps ──────────────────────────────────────────────────────
-    const MARKER_LABELS = ['0
-Top-Left','1
-Top-Right','2
-Bot-Right','3
-Bot-Left'];
-    markerTaps.forEach(({cx,cy}, i) => {
-      ctx.beginPath();
-      ctx.arc(cx, cy, 18*r, 0, Math.PI*2);
-      ctx.fillStyle   = GOLD;
-      ctx.fill();
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth   = 3*r;
-      ctx.stroke();
-      ctx.fillStyle  = '#111';
-      ctx.font       = `bold ${16*r}px sans-serif`;
-      ctx.textAlign  = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(i, cx, cy);
-    });
+      // Pulse ring for current target
+      if (phase==='mapping'&&!retap) {
+        const pulse=0.5+0.5*Math.sin(Date.now()/300);
+        ctx.beginPath(); ctx.arc(canvas.width/2,canvas.height/2,(30+pulse*10)*R,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(201,168,80,${0.4+pulse*0.4})`; ctx.lineWidth=3*R; ctx.stroke();
+      }
+      rafRef.current=requestAnimationFrame(draw);
+    };
+    rafRef.current=requestAnimationFrame(draw);
+    return ()=>cancelAnimationFrame(rafRef.current);
+  },[mTaps,mapped,phase,retap]);
 
-    // ── Draw already-mapped province dots ─────────────────────────────────────
-    Object.values(mapped).forEach(item => {
-      const isRetap = retapping === item.id;
-      const col = item.type === 'box' ? '#60aaff' : (REGION_COLOURS[item.r] || '#aaa');
-      ctx.beginPath();
-      ctx.arc(item.cx, item.cy, isRetap ? 20*r : 13*r, 0, Math.PI*2);
-      ctx.fillStyle = col + (isRetap ? 'ff' : 'cc');
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2*r;
-      ctx.stroke();
-      // Label
-      ctx.fillStyle = '#fff';
-      ctx.font = `bold ${11*r}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(item.n?.substring(0,8), item.cx, item.cy - 16*r);
-    });
-
-    // ── Pulse ring on current target ──────────────────────────────────────────
-    if (phase === 'mapping' && !retapping) {
-      const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
-      const R = (30 + pulse * 12) * r;
-      ctx.beginPath();
-      ctx.arc(canvas.width/2, canvas.height/2, R, 0, Math.PI*2);
-      ctx.strokeStyle = `rgba(201,168,80,${0.4 + pulse*0.4})`;
-      ctx.lineWidth = 3*r;
-      ctx.stroke();
-    }
-
-    rafRef.current = requestAnimationFrame(drawOverlay);
-  }, [markerTaps, mapped, phase, retapping]);
-
-  useEffect(() => {
-    rafRef.current = requestAnimationFrame(drawOverlay);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [drawOverlay]);
-
-  // ── Tap handler ───────────────────────────────────────────────────────────────
-  const handleTap = useCallback((e) => {
+  // Tap handler
+  const handleTap = useCallback((e)=>{
     e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const rect   = canvas.getBoundingClientRect();
-    const touch  = e.touches?.[0] || e.changedTouches?.[0] || e;
-    const scaleX = canvas.width  / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const cx = (touch.clientX - rect.left) * scaleX;
-    const cy = (touch.clientY - rect.top)  * scaleY;
+    const touch  = e.touches?.[0]||e.changedTouches?.[0]||e;
+    const scaleX = canvas.width/rect.width;
+    const scaleY = canvas.height/rect.height;
+    const cx = (touch.clientX-rect.left)*scaleX;
+    const cy = (touch.clientY-rect.top)*scaleY;
 
-    if (phase === 'markers') {
-      const newTaps = [...markerTaps, {cx, cy}];
-      setMarkerTaps(newTaps);
-      if (newTaps.length === 4) {
-        // Markers map to board-normalised corners: 0→TL, 1→TR, 2→BR, 3→BL
-        const src = newTaps.map(t => [t.cx, t.cy]);
+    if (phase==='markers') {
+      const next = [...mTaps,{cx,cy}];
+      setMTaps(next);
+      if (next.length===4) {
+        const src = next.map(t=>[t.cx,t.cy]);
         const dst = [[0,0],[1,0],[1,1],[0,1]];
-        const newH = computeH(src, dst);
-        if (newH) {
-          setH(newH);
-          setPhase('mapping');
-          showToast('Markers locked! Now tap each province centre.');
-        } else {
-          showToast('Homography failed — retrying');
-          setMarkerTaps([]);
-        }
+        const newH = computeH(src,dst);
+        if (newH) { setH(newH); setPhase('mapping'); showToast('Board locked! Tap each province.'); }
+        else { showToast('Error — try again'); setMTaps([]); }
       }
-    } else if (phase === 'mapping' || retapping) {
+    } else if (phase==='mapping'||retap) {
       if (!H) return;
-      const [bx, by] = applyH(H, cx, cy);
-      const id = retapping ?? ALL_ITEMS[currentIdx]?.id;
-      const item = ALL_ITEMS.find(x => x.id === id) ?? ALL_ITEMS[currentIdx];
+      const [bx,by] = applyH(H,cx,cy);
+      const id   = retap ?? ALL_ITEMS[curIdx]?.id;
+      const item = ALL_ITEMS.find(x=>x.id===id)??ALL_ITEMS[curIdx];
       if (!item) return;
-
-      const newMapped = {...mapped, [id]: {...item, cx, cy, bx, by}};
+      const newMapped = {...mapped,[id]:{...item,cx,cy,bx,by}};
       setMapped(newMapped);
-      saveCalibration(newMapped);
-
-      if (retapping) {
-        setRetapping(null);
-        showToast(`✓ ${item.n} updated`);
-      } else {
-        showToast(`✓ ${item.n}`);
-        const next = currentIdx + 1;
-        if (next >= ALL_ITEMS.length) setPhase('review');
-        else setCurrentIdx(next);
+      saveCal(newMapped);
+      if (retap) { setRetap(null); showToast('Updated: '+item.n); }
+      else {
+        showToast(item.n+' saved');
+        const next=curIdx+1;
+        if (next>=ALL_ITEMS.length) setPhase('review');
+        else setCurIdx(next);
       }
     }
-  }, [phase, markerTaps, H, mapped, currentIdx, retapping]);
+  },[phase,mTaps,H,mapped,curIdx,retap]);
 
-  // ── Computed progress ─────────────────────────────────────────────────────────
-  const mappedCount   = Object.keys(mapped).length;
-  const totalItems    = ALL_ITEMS.length;
-  const currentItem   = ALL_ITEMS[currentIdx];
-  const pct           = Math.round(mappedCount / totalItems * 100);
-  const markerPrompts = ['0 — Top-Left corner','1 — Top-Right corner','2 — Bottom-Right corner','3 — Bottom-Left corner'];
+  const mappedCount = Object.keys(mapped).length;
+  const total       = ALL_ITEMS.length;
+  const curItem     = ALL_ITEMS[curIdx];
+  const pct         = Math.round(mappedCount/total*100);
 
-  // ── Export JSON ───────────────────────────────────────────────────────────────
-  const exportJSON = () => {
-    const out = {};
-    Object.values(mapped).forEach(item => {
-      out[item.id] = {
-        id:   item.id,
-        name: item.n,
-        type: item.type,
-        ...(item.type === 'province' ? {region:item.r, fdl:item.fdl, vp:item.vp, par:item.par} : {}),
-        board_x: Math.round(item.bx * 10000) / 10000,
-        board_y: Math.round(item.by * 10000) / 10000,
-      };
-    });
-    const json = JSON.stringify(out, null, 2);
-    // Copy to clipboard
-    navigator.clipboard?.writeText(json).then(() => showToast('JSON copied to clipboard!', 3000))
-      .catch(() => showToast('Copy failed — see console'));
-    console.log('LIBERTÉ CALIBRATION MAP:
-', json);
-  };
+  const MARKER_PROMPTS = ['0 — Top-Left','1 — Top-Right','2 — Bottom-Right','3 — Bottom-Left'];
 
-  // ── Render: intro ─────────────────────────────────────────────────────────────
-  if (phase === 'loading') return (
-    <div style={{...GAR,display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#09090f',color:'#c9a850'}}>
+  // ── Loading ──────────────────────────────────────────────────────────────────
+  if (phase==='loading') return (
+    <div style={{...GAR,display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#09090f',color:GOLD}}>
       <div style={{...CIN,fontSize:'16px',letterSpacing:'2px'}}>Loading…</div>
     </div>
   );
 
-  if (phase === 'intro') return (
-    <div style={{...GAR,minHeight:'100vh',background:'linear-gradient(160deg,#06060e,#0e0e20)',color:'#ddd0b8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'28px 24px',gap:'20px'}}>
+  // ── Intro ────────────────────────────────────────────────────────────────────
+  if (phase==='intro') return (
+    <div style={{...GAR,minHeight:'100vh',background:'linear-gradient(160deg,#06060e,#0e0e20)',color:'#ddd0b8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'28px 24px',gap:'20px',overflowY:'auto'}}>
       <div style={{textAlign:'center'}}>
-        <div style={{...CIN,fontSize:'32px',color:GOLD,letterSpacing:'4px',fontWeight:700}}>LIBERTÉ</div>
+        <div style={{...CIN,fontSize:'32px',color:GOLD,letterSpacing:'4px',fontWeight:700}}>LIBERTE</div>
         <div style={{...CIN,fontSize:'11px',color:'#6a6070',letterSpacing:'2px',marginTop:'6px'}}>BOARD CALIBRATION</div>
       </div>
-
       <div style={{background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'10px',padding:'20px',maxWidth:'380px',width:'100%'}}>
-        <div style={{...CIN,fontSize:'11px',color:'#9080a0',letterSpacing:'1.5px',marginBottom:'14px'}}>HOW THIS WORKS</div>
-        <div style={{display:'flex',flexDirection:'column',gap:'12px',fontSize:'15px',lineHeight:1.6,color:'#c0b0a0'}}>
-          {[
-            ['1','Set up the board with the 4 laminated ArUco markers at the corners'],
-            ['2','Point your phone camera at the board'],
-            ['3','Tap the centre of each marker in order (0→1→2→3)'],
-            ['4','Tap the centre of each province and box'],
-            ['5','Done — calibration saves automatically'],
-          ].map(([n,t]) => (
-            <div key={n} style={{display:'flex',gap:'12px',alignItems:'flex-start'}}>
-              <div style={{...CIN,color:GOLD,fontSize:'13px',minWidth:'18px',marginTop:'2px'}}>{n}.</div>
-              <div>{t}</div>
-            </div>
-          ))}
-        </div>
+        <div style={{...CIN,fontSize:'10px',color:'#9080a0',letterSpacing:'1.5px',marginBottom:'14px'}}>HOW THIS WORKS</div>
+        {[
+          ['1','Place the 4 laminated ArUco markers at the board corners'],
+          ['2','Tap Start — allow camera access when prompted'],
+          ['3','Tap each marker centre in order: 0, 1, 2, 3'],
+          ['4','Tap the centre of each province and box (33 taps total)'],
+          ['5','Calibration saves automatically as you go'],
+        ].map(([n,t])=>(
+          <div key={n} style={{display:'flex',gap:'12px',alignItems:'flex-start',marginBottom:'10px',fontSize:'15px',lineHeight:1.6,color:'#c0b0a0'}}>
+            <div style={{...CIN,color:GOLD,fontSize:'13px',minWidth:'18px',marginTop:'2px'}}>{n}.</div>
+            <div>{t}</div>
+          </div>
+        ))}
       </div>
-
-      {mappedCount > 0 && (
+      {mappedCount>0&&(
         <div style={{background:'rgba(40,160,80,.1)',border:'1px solid rgba(40,160,80,.3)',borderRadius:'8px',padding:'12px 16px',maxWidth:'380px',width:'100%',fontSize:'14px',color:'#70c888',textAlign:'center'}}>
-          Existing calibration found — {mappedCount}/{totalItems} points mapped.
-          <br/><span style={{fontSize:'12px',color:'#50a060'}}>Re-running will update any province you re-tap.</span>
+          Saved calibration found — {mappedCount}/{total} points mapped.
         </div>
       )}
-
       <div style={{display:'flex',flexDirection:'column',gap:'10px',width:'100%',maxWidth:'380px'}}>
-        <Btn full onClick={async () => { await startCamera(); setPhase('markers'); setMarkerTaps([]); }}>
-          📷 Start Calibration
+        <Btn full onClick={async()=>{ await startCam(); setPhase('markers'); setMTaps([]); setH(null); }}>
+          Start Calibration
         </Btn>
-        {mappedCount > 0 && (
-          <Btn full col='#6080c0' onClick={() => setPhase('review')}>
-            View Existing Map
-          </Btn>
-        )}
-      </div>
-
-      <div style={{fontSize:'13px',color:'#4a4050',textAlign:'center'}}>
-        This runs once. Takes ~15 minutes.
+        {mappedCount>0&&<Btn full col='#6080c0' onClick={()=>setPhase('review')}>View Existing Map</Btn>}
       </div>
     </div>
   );
 
-  // ── Render: camera phases (markers + mapping) ──────────────────────────────
-  if (phase === 'markers' || phase === 'mapping') {
-    const isMarkers = phase === 'markers';
-    const regionCol = currentItem?.r ? REGION_COLOURS[currentItem.r] : '#6080c0';
-    const promptCol = retapping
-      ? '#6080c0'
-      : isMarkers ? GOLD : (currentItem?.type === 'box' ? '#6080c0' : regionCol);
-
-    const promptText = retapping
-      ? `Re-tap: ${ALL_ITEMS.find(x=>x.id===retapping)?.n}`
-      : isMarkers
-        ? `Tap marker ${markerPrompts[markerTaps.length]}`
-        : currentItem
-          ? currentItem.n
-          : 'All done!';
-
-    const subText = retapping
-      ? 'Tap the new centre point'
-      : isMarkers
-        ? `${markerTaps.length}/4 markers tapped`
-        : `${currentItem?.type === 'box' ? 'Box' : `Region ${currentItem?.r}`}${currentItem?.fdl ? ' · ⚜ Frontier' : ''}${currentItem?.par ? ' · ★ Paris' : ''}${currentItem?.vp ? ` · +${currentItem.vp}VP` : ''}`;
-
+  // ── Camera phases ─────────────────────────────────────────────────────────────
+  if (phase==='markers'||phase==='mapping') {
+    const isMarkers = phase==='markers';
+    const retapItem = retap ? ALL_ITEMS.find(x=>x.id===retap) : null;
+    const promptCol = retap?'#6080c0':isMarkers?GOLD:(curItem?.type==='box'?'#6080c0':(RGN_COL[curItem?.r]||GOLD));
+    const promptTxt = retap ? 'Re-tap: '+retapItem?.n
+                    : isMarkers ? 'Tap marker '+MARKER_PROMPTS[mTaps.length]
+                    : curItem ? curItem.n : 'All done!';
+    const subTxt    = retap ? 'Tap the new centre point'
+                    : isMarkers ? mTaps.length+'/4 markers tapped'
+                    : curItem?.type==='box' ? 'Box'
+                    : 'Region '+(curItem?.r)+(curItem?.fdl?' · Frontier':'')+(curItem?.par?' · Paris':'')+(curItem?.vp?' · +'+curItem.vp+'VP':'');
     return (
       <div style={{position:'relative',width:'100vw',height:'100vh',background:'#000',overflow:'hidden'}}>
-        {/* Camera video */}
         <video ref={videoRef} playsInline muted
           style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}/>
-
-        {/* Canvas overlay */}
         <canvas ref={canvasRef}
           style={{position:'absolute',inset:0,width:'100%',height:'100%',touchAction:'none'}}
-          onTouchEnd={handleTap}
-          onClick={handleTap}/>
-
-        {camError && (
+          onTouchEnd={handleTap} onClick={handleTap}/>
+        {camError&&(
           <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.85)',color:'#e04040',padding:'24px',textAlign:'center',...GAR,fontSize:'16px'}}>
             {camError}
           </div>
         )}
-
-        {/* Progress bar */}
-        {!isMarkers && (
+        {!isMarkers&&(
           <div style={{position:'absolute',top:0,left:0,right:0,height:'3px',background:'rgba(255,255,255,.1)'}}>
-            <div style={{height:'100%',background:GOLD,width:`${pct}%`,transition:'width .3s'}}/>
+            <div style={{height:'100%',background:GOLD,width:pct+'%',transition:'width .3s'}}/>
           </div>
         )}
-
-        {/* Top prompt card */}
-        <div style={{position:'absolute',top:isMarkers?12:16,left:12,right:12,pointerEvents:'none'}}>
-          <div style={{background:'rgba(0,0,0,.78)',backdropFilter:'blur(8px)',borderRadius:'10px',border:`1px solid ${promptCol}55`,padding:'12px 16px'}}>
-            <div style={{...CIN,fontSize:'13px',color:promptCol,letterSpacing:'1px',marginBottom:'3px'}}>{promptText}</div>
-            <div style={{fontSize:'13px',color:'rgba(255,255,255,.55)',...GAR}}>{subText}</div>
+        <div style={{position:'absolute',top:16,left:12,right:12,pointerEvents:'none'}}>
+          <div style={{background:'rgba(0,0,0,.78)',backdropFilter:'blur(8px)',borderRadius:'10px',border:'1px solid '+promptCol+'55',padding:'12px 16px'}}>
+            <div style={{...CIN,fontSize:'13px',color:promptCol,letterSpacing:'1px',marginBottom:'3px'}}>{promptTxt}</div>
+            <div style={{fontSize:'13px',color:'rgba(255,255,255,.55)',...GAR}}>{subTxt}</div>
           </div>
         </div>
-
-        {/* Bottom controls */}
-        <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'16px 12px',background:'linear-gradient(transparent,rgba(0,0,0,.85))',display:'flex',gap:'8px',alignItems:'flex-end'}}>
-
-          {/* Undo button */}
-          {(isMarkers && markerTaps.length > 0) && (
-            <button onClick={() => setMarkerTaps(t => t.slice(0,-1))}
+        <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'16px 12px',background:'linear-gradient(transparent,rgba(0,0,0,.85))',display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+          {isMarkers&&mTaps.length>0&&(
+            <button onClick={()=>setMTaps(t=>t.slice(0,-1))}
               style={{background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',borderRadius:'6px',padding:'10px 16px',color:'#ddd',...CIN,fontSize:'10px',letterSpacing:'1px'}}>
-              ↩ Undo
+              Undo
             </button>
           )}
-
-          {/* Skip province */}
-          {phase === 'mapping' && !retapping && (
-            <button onClick={() => {
-              const next = currentIdx + 1;
-              if (next >= ALL_ITEMS.length) setPhase('review');
-              else setCurrentIdx(next);
-            }} style={{background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'6px',padding:'10px 16px',color:'#aaa',...CIN,fontSize:'10px',letterSpacing:'1px'}}>
+          {phase==='mapping'&&!retap&&(
+            <button onClick={()=>{ const n=curIdx+1; if(n>=ALL_ITEMS.length) setPhase('review'); else setCurIdx(n); }}
+              style={{background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'6px',padding:'10px 16px',color:'#aaa',...CIN,fontSize:'10px',letterSpacing:'1px'}}>
               Skip
             </button>
           )}
-
-          {/* Cancel retap */}
-          {retapping && (
-            <button onClick={() => setRetapping(null)}
+          {retap&&(
+            <button onClick={()=>setRetap(null)}
               style={{background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'6px',padding:'10px 16px',color:'#aaa',...CIN,fontSize:'10px',letterSpacing:'1px'}}>
               Cancel
             </button>
           )}
-
-          {/* Province list preview (mapping phase) */}
-          {phase === 'mapping' && !retapping && (
-            <div style={{flex:1,overflowX:'auto',display:'flex',gap:'6px',paddingBottom:'2px'}}>
-              {ALL_ITEMS.slice(Math.max(0,currentIdx-1), currentIdx+5).map((item,i) => {
-                const isCurrent = item.id === currentItem?.id;
-                const isDone    = !!mapped[item.id];
-                const col = item.type==='box'?'#6080c0':(REGION_COLOURS[item.r]||'#aaa');
+          {phase==='mapping'&&!retap&&(
+            <div style={{flex:1,overflowX:'auto',display:'flex',gap:'6px'}}>
+              {ALL_ITEMS.slice(Math.max(0,curIdx-1),curIdx+6).map(item=>{
+                const isCur=item.id===curItem?.id;
+                const done=!!mapped[item.id];
+                const col=item.type==='box'?'#6080c0':(RGN_COL[item.r]||'#aaa');
                 return (
-                  <div key={item.id} style={{
-                    flexShrink:0,padding:'6px 10px',borderRadius:'6px',
-                    background:isCurrent?`${col}44`:`${col}18`,
-                    border:`1px solid ${isCurrent?col:col+'44'}`,
-                    ...CIN,fontSize:'9px',color:isCurrent?'#fff':isDone?col+'aa':'rgba(255,255,255,.4)',
-                    letterSpacing:'.5px',whiteSpace:'nowrap',
-                  }}>
-                    {isDone && !isCurrent ? '✓ ' : ''}{item.n.substring(0,10)}
+                  <div key={item.id} style={{flexShrink:0,padding:'6px 10px',borderRadius:'6px',
+                    background:isCur?col+'44':col+'18',border:'1px solid '+(isCur?col:col+'44'),
+                    ...CIN,fontSize:'9px',color:isCur?'#fff':done?col+'aa':'rgba(255,255,255,.4)',
+                    letterSpacing:'.5px',whiteSpace:'nowrap'}}>
+                    {done&&!isCur?'v ':''}{item.n.substring(0,9)}
                   </div>
                 );
               })}
             </div>
           )}
-
-          {/* Done button if all mapped */}
-          {phase === 'mapping' && mappedCount === totalItems && !retapping && (
-            <button onClick={() => setPhase('review')}
-              style={{background:GOLD+'44',border:`1px solid ${GOLD}`,borderRadius:'6px',padding:'10px 20px',color:GOLD,...CIN,fontSize:'11px',letterSpacing:'1px',whiteSpace:'nowrap'}}>
-              Review →
+          {phase==='mapping'&&mappedCount===total&&!retap&&(
+            <button onClick={()=>setPhase('review')}
+              style={{background:GOLD+'44',border:'1px solid '+GOLD,borderRadius:'6px',padding:'10px 20px',color:GOLD,...CIN,fontSize:'11px',letterSpacing:'1px',whiteSpace:'nowrap'}}>
+              Review
             </button>
           )}
         </div>
-
-        {/* Toast */}
-        {toast && (
-          <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(0,0,0,.85)',border:`1px solid ${GOLD}66`,borderRadius:'8px',padding:'12px 24px',color:GOLD,...CIN,fontSize:'12px',letterSpacing:'1px',pointerEvents:'none',textAlign:'center',whiteSpace:'nowrap'}}>
+        {toast&&(
+          <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(0,0,0,.88)',border:'1px solid '+GOLD+'66',borderRadius:'8px',padding:'12px 24px',color:GOLD,...CIN,fontSize:'12px',letterSpacing:'1px',pointerEvents:'none',textAlign:'center',whiteSpace:'nowrap'}}>
             {toast}
           </div>
         )}
@@ -534,116 +390,90 @@ Bot-Left'];
     );
   }
 
-  // ── Render: review ─────────────────────────────────────────────────────────
-  if (phase === 'review') {
-    const unmapped = ALL_ITEMS.filter(x => !mapped[x.id]);
+  // ── Review ────────────────────────────────────────────────────────────────────
+  if (phase==='review') {
+    const missing = ALL_ITEMS.filter(x=>!mapped[x.id]);
+    const exportJSON = ()=>{
+      const out={};
+      Object.values(mapped).forEach(item=>{
+        out[item.id]={id:item.id,name:item.n,type:item.type,
+          ...(item.type==='province'?{region:item.r,fdl:item.fdl,vp:item.vp,par:item.par}:{}),
+          board_x:Math.round(item.bx*10000)/10000,
+          board_y:Math.round(item.by*10000)/10000};
+      });
+      const json=JSON.stringify(out,null,2);
+      navigator.clipboard?.writeText(json)
+        .then(()=>showToast('Copied to clipboard!',3000))
+        .catch(()=>{ showToast('See console for JSON'); console.log(json); });
+    };
     return (
-      <div style={{...GAR,minHeight:'100vh',background:'#09090f',color:'#ddd0b8',display:'flex',flexDirection:'column'}}>
-        {/* Header */}
+      <div style={{...GAR,minHeight:'100vh',background:'#09090f',color:'#ddd0b8',display:'flex',flexDirection:'column',height:'100vh'}}>
         <div style={{background:'rgba(0,0,0,.6)',padding:'14px 16px',borderBottom:'1px solid #1e1830',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
           <div style={{...CIN,fontSize:'14px',color:GOLD,letterSpacing:'2px'}}>CALIBRATION MAP</div>
-          <div style={{...CIN,fontSize:'11px',color:'#8a8090'}}>{mappedCount}/{totalItems} points</div>
+          <div style={{...CIN,fontSize:'11px',color:'#8a8090'}}>{mappedCount}/{total}</div>
         </div>
-
-        {/* Progress */}
-        <div style={{padding:'16px',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
-          <div style={{display:'flex',justifyContent:'space-between',marginBottom:'6px',fontSize:'13px',color:'#8a8090'}}>
-            <span>Mapped</span><span style={{color:mappedCount===totalItems?'#50c070':GOLD}}>{pct}%</span>
+        <div style={{padding:'14px 16px',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:'5px',fontSize:'13px',color:'#8a8090'}}>
+            <span>Progress</span>
+            <span style={{color:mappedCount===total?'#50c070':GOLD}}>{pct}%</span>
           </div>
-          <div style={{height:'6px',background:'rgba(255,255,255,.07)',borderRadius:'3px'}}>
-            <div style={{height:'100%',background:mappedCount===totalItems?'#50c070':GOLD,borderRadius:'3px',width:`${pct}%`,transition:'width .4s'}}/>
+          <div style={{height:'5px',background:'rgba(255,255,255,.07)',borderRadius:'3px'}}>
+            <div style={{height:'100%',background:mappedCount===total?'#50c070':GOLD,borderRadius:'3px',width:pct+'%',transition:'width .4s'}}/>
           </div>
-          {unmapped.length > 0 && (
-            <div style={{marginTop:'8px',fontSize:'12px',color:'#c04040'}}>
-              Missing: {unmapped.map(x=>x.n).join(', ')}
-            </div>
-          )}
+          {missing.length>0&&<div style={{marginTop:'7px',fontSize:'12px',color:'#c04040'}}>Missing: {missing.map(x=>x.n).join(', ')}</div>}
         </div>
-
-        {/* Province list */}
-        <div style={{flex:1,overflowY:'auto',padding:'12px 16px',display:'flex',flexDirection:'column',gap:'6px'}}>
-
-          <div style={{...CIN,fontSize:'10px',color:'#9080b0',letterSpacing:'1.5px',marginBottom:'6px'}}>PROVINCES</div>
-          {PROVINCES.map(prov => {
-            const m = mapped[prov.id];
-            const col = REGION_COLOURS[prov.r];
+        <div style={{flex:1,overflowY:'auto',padding:'12px 16px',display:'flex',flexDirection:'column',gap:'5px'}}>
+          <div style={{...CIN,fontSize:'10px',color:'#9080b0',letterSpacing:'1.5px',marginBottom:'5px'}}>PROVINCES</div>
+          {PROVINCES.map(p=>{
+            const m=mapped[p.id]; const col=RGN_COL[p.r];
             return (
-              <div key={prov.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 12px',background:m?`${col}14`:'rgba(255,255,255,.03)',borderRadius:'7px',border:`1px solid ${m?col+'33':'rgba(255,255,255,.05)'}`}}>
+              <div key={p.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'8px 12px',background:m?col+'14':'rgba(255,255,255,.03)',borderRadius:'7px',border:'1px solid '+(m?col+'33':'rgba(255,255,255,.05)')}}>
                 <div style={{width:'8px',height:'8px',borderRadius:'50%',background:m?col:'#333',flexShrink:0}}/>
                 <span style={{flex:1,fontSize:'14px',color:m?'#e0d0b8':'#5a5060'}}>
-                  {prov.n}
-                  {prov.fdl && <span style={{color:'#8a9098',fontSize:'11px'}}> ⚜</span>}
-                  {prov.par && <span style={{color:GOLD,fontSize:'11px'}}> ★</span>}
-                  {prov.vp>0 && <span style={{color:'#b89010',fontSize:'11px'}}> +{prov.vp}</span>}
+                  {p.n}{p.fdl&&<span style={{color:'#8a9098',fontSize:'11px'}}> *</span>}{p.par&&<span style={{color:GOLD,fontSize:'11px'}}> P</span>}{p.vp>0&&<span style={{color:'#b89010',fontSize:'11px'}}> +{p.vp}</span>}
                 </span>
-                {m
-                  ? <button onClick={async () => { await startCamera(); setPhase('mapping'); setRetapping(prov.id); }}
-                      style={{...CIN,fontSize:'9px',color:'#8080a0',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'4px',padding:'4px 8px',letterSpacing:'.5px'}}>
-                      Re-tap
-                    </button>
-                  : <button onClick={async () => { await startCamera(); setPhase('mapping'); setCurrentIdx(ALL_ITEMS.findIndex(x=>x.id===prov.id)); }}
-                      style={{...CIN,fontSize:'9px',color:'#c04040',background:'rgba(192,64,64,.1)',border:'1px solid rgba(192,64,64,.3)',borderRadius:'4px',padding:'4px 8px',letterSpacing:'.5px'}}>
-                      Tap now
-                    </button>
-                }
+                <button onClick={async()=>{ await startCam(); setPhase('mapping'); if(m) setRetap(p.id); else setCurIdx(ALL_ITEMS.findIndex(x=>x.id===p.id)); }}
+                  style={{...CIN,fontSize:'9px',color:m?'#8080a0':'#c04040',background:m?'rgba(255,255,255,.06)':'rgba(192,64,64,.1)',border:'1px solid '+(m?'rgba(255,255,255,.1)':'rgba(192,64,64,.3)'),borderRadius:'4px',padding:'4px 8px',letterSpacing:'.5px'}}>
+                  {m?'Re-tap':'Tap'}
+                </button>
               </div>
             );
           })}
-
-          <div style={{...CIN,fontSize:'10px',color:'#9080b0',letterSpacing:'1.5px',margin:'12px 0 6px'}}>BOXES</div>
-          {BOXES.map(box => {
-            const m = mapped[box.id];
+          <div style={{...CIN,fontSize:'10px',color:'#9080b0',letterSpacing:'1.5px',margin:'10px 0 5px'}}>BOXES</div>
+          {BOXES.map(box=>{
+            const m=mapped[box.id];
             return (
-              <div key={box.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 12px',background:m?'rgba(96,128,192,.12)':'rgba(255,255,255,.03)',borderRadius:'7px',border:`1px solid ${m?'rgba(96,128,192,.35)':'rgba(255,255,255,.05)'}`}}>
+              <div key={box.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'8px 12px',background:m?'rgba(96,128,192,.12)':'rgba(255,255,255,.03)',borderRadius:'7px',border:'1px solid '+(m?'rgba(96,128,192,.3)':'rgba(255,255,255,.05)')}}>
                 <div style={{width:'8px',height:'8px',borderRadius:'2px',background:m?'#6080c0':'#333',flexShrink:0}}/>
                 <span style={{flex:1,fontSize:'14px',color:m?'#e0d0b8':'#5a5060'}}>{box.n}</span>
-                {m
-                  ? <button onClick={async () => { await startCamera(); setPhase('mapping'); setRetapping(box.id); }}
-                      style={{...CIN,fontSize:'9px',color:'#8080a0',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',borderRadius:'4px',padding:'4px 8px',letterSpacing:'.5px'}}>
-                      Re-tap
-                    </button>
-                  : <button onClick={async () => { await startCamera(); setPhase('mapping'); setCurrentIdx(ALL_ITEMS.findIndex(x=>x.id===box.id)); }}
-                      style={{...CIN,fontSize:'9px',color:'#c04040',background:'rgba(192,64,64,.1)',border:'1px solid rgba(192,64,64,.3)',borderRadius:'4px',padding:'4px 8px',letterSpacing:'.5px'}}>
-                      Tap now
-                    </button>
-                }
+                <button onClick={async()=>{ await startCam(); setPhase('mapping'); if(m) setRetap(box.id); else setCurIdx(ALL_ITEMS.findIndex(x=>x.id===box.id)); }}
+                  style={{...CIN,fontSize:'9px',color:m?'#8080a0':'#c04040',background:m?'rgba(255,255,255,.06)':'rgba(192,64,64,.1)',border:'1px solid '+(m?'rgba(255,255,255,.1)':'rgba(192,64,64,.3)'),borderRadius:'4px',padding:'4px 8px',letterSpacing:'.5px'}}>
+                  {m?'Re-tap':'Tap'}
+                </button>
               </div>
             );
           })}
         </div>
-
-        {/* Footer actions */}
         <div style={{padding:'14px 16px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',gap:'8px',flexShrink:0}}>
-          {mappedCount === totalItems && (
-            <Btn full onClick={exportJSON}>
-              📋 Copy Calibration JSON
-            </Btn>
-          )}
+          <Btn full onClick={exportJSON} disabled={mappedCount<total}>Copy Calibration JSON</Btn>
           <div style={{display:'flex',gap:'8px'}}>
-            <Btn col='#6080c0' full sm onClick={async () => { await startCamera(); setPhase('markers'); setMarkerTaps([]); setH(null); }}>
-              Re-run Markers
-            </Btn>
-            <Btn col='#806080' full sm onClick={() => setPhase('intro')}>
-              ← Home
-            </Btn>
+            <Btn col='#6080c0' full sm onClick={async()=>{ await startCam(); setPhase('markers'); setMTaps([]); setH(null); }}>Re-run Markers</Btn>
+            <Btn col='#806080' full sm onClick={()=>setPhase('intro')}>Home</Btn>
           </div>
         </div>
-
-        {toast && (
-          <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(0,0,0,.9)',border:`1px solid ${GOLD}66`,borderRadius:'8px',padding:'12px 24px',color:GOLD,...CIN,fontSize:'12px',letterSpacing:'1px',textAlign:'center',zIndex:100}}>
+        {toast&&(
+          <div style={{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(0,0,0,.9)',border:'1px solid '+GOLD+'66',borderRadius:'8px',padding:'12px 24px',color:GOLD,...CIN,fontSize:'12px',letterSpacing:'1px',textAlign:'center',zIndex:100}}>
             {toast}
           </div>
         )}
       </div>
     );
   }
-
   return null;
 }
 
-    // Mount the app
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(React.createElement(Calibration));
-  </script>
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
+</script>
 </body>
 </html>
