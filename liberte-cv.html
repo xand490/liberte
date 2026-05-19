@@ -261,7 +261,17 @@ function App(){
       streamRef.current=stream;
       const v=videoRef.current; if(!v) return;
       v.srcObject=stream;
-      v.onloadedmetadata=()=>{ v.play(); if(canvasRef.current){canvasRef.current.width=v.videoWidth||1280;canvasRef.current.height=v.videoHeight||720;} };
+      v.onloadedmetadata=()=>{
+        v.play();
+        const c=canvasRef.current; if(!c) return;
+        // Use the camera's native resolution so imageData is full quality
+        c.width  = v.videoWidth  || 1280;
+        c.height = v.videoHeight || 720;
+        // Scale canvas display to fill the container via CSS
+        c.style.width  = '100%';
+        c.style.height = '100%';
+        c.style.objectFit = 'cover';
+      };
     } catch(e){ setCamError('Camera access denied.'); }
   },[]);
 
@@ -282,6 +292,26 @@ function App(){
       const ctx=canvas.getContext('2d');
       if(video.readyState>=2) ctx.drawImage(video,0,0,canvas.width,canvas.height);
       const R=canvas.width/1000;
+
+      // ── Baseline capture (triggered after marker setup) ─────────────────────
+      if(captureBaselineRef.current && video.readyState>=2){
+        const capH_inv = captureBaselineRef.current;
+        captureBaselineRef.current = null; // clear flag immediately
+        try{
+          const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+          const SAMPLE_R=Math.max(14,canvas.width*0.013);
+          baselineRef.current=captureBaseline(imgData,capH_inv,calibRef.current,canvas.width,canvas.height,SAMPLE_R);
+          setHasBaseline(true);
+          setToast('Baseline captured ✓');
+          setTimeout(()=>setToast(null),2000);
+        } catch(e){
+          console.error('Baseline capture error:',e);
+          setToast('Baseline failed — will retry');
+          setTimeout(()=>setToast(null),2000);
+          // Retry on next frame
+          setTimeout(()=>{ captureBaselineRef.current=capH_inv; },500);
+        }
+      }
 
       // ── Marker phase ────────────────────────────────────────────────────────
       if(phase==='markers'){
@@ -444,20 +474,10 @@ function App(){
           const inv=invertH(H);
           if(inv){
             HRef.current=inv; H_fwd.current=H;
-            showToast('Board locked — capturing baseline…', 2000);
-            // Wait 1.5s so the toast renders, then snapshot the empty board
-            setTimeout(()=>{
-              const canvas=canvasRef.current; if(!canvas) return;
-              const ctx=canvas.getContext('2d');
-              try{
-                const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
-                const SAMPLE_R=Math.max(14,canvas.width*0.013);
-                baselineRef.current=captureBaseline(imgData,inv,calibRef.current,canvas.width,canvas.height,SAMPLE_R);
-                setHasBaseline(true);
-                showToast('Baseline captured — detection active');
-              } catch(e){ showToast('Baseline failed — detection active (no baseline)'); }
-              setPhase('running');
-            },1500);
+            showToast('Board locked — point at board, capturing baseline…', 2500);
+            // Signal the animation loop to capture baseline on the next drawn frame
+            captureBaselineRef.current = inv; // store inv so loop can use it
+            setPhase('running');
           }
           else { showToast('Matrix error — try again'); setMTaps([]); }
         } else { showToast('Homography failed — try again'); setMTaps([]); }
@@ -645,14 +665,11 @@ function App(){
             </button>
           )}
           <button onClick={()=>{
-              const canvas=canvasRef.current; if(!canvas) return;
-              const ctx=canvas.getContext('2d');
-              try{
-                const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
-                const SAMPLE_R=Math.max(14,canvas.width*0.013);
-                baselineRef.current=captureBaseline(imgData,HRef.current,calibRef.current,canvas.width,canvas.height,SAMPLE_R);
-                setHasBaseline(true); showToast('Baseline recaptured');
-              } catch(e){ showToast('Failed to recapture'); }
+              if(HRef.current){
+                captureBaselineRef.current=HRef.current;
+                setHasBaseline(false);
+                showToast('Recapturing baseline…');
+              }
             }}
             style={{background:hasBaseline?'rgba(80,200,120,.12)':'rgba(200,80,80,.12)',border:`1px solid ${hasBaseline?'rgba(80,200,120,.4)':'rgba(200,80,80,.4)'}`,borderRadius:'6px',padding:'7px 12px',color:hasBaseline?'#50c878':'#e08080',...CIN,fontSize:'9px',letterSpacing:'1px'}}>
             {hasBaseline?'✓ Baseline':'Recapture'}
