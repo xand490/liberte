@@ -145,12 +145,19 @@ function App() {
     });
   },[]);
 
+  // Start camera AFTER the video element is rendered into the DOM
+  useEffect(()=>{
+    if (phase === 'markers' || phase === 'mapping') {
+      startCam();
+    }
+  },[phase]);
+
   // Start camera
   const startCam = useCallback(async ()=>{
     try {
       if (streamRef.current) streamRef.current.getTracks().forEach(t=>t.stop());
       const stream = await navigator.mediaDevices.getUserMedia({
-        video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},audio:false
+        video:{facingMode:{ideal:'environment'}},audio:false
       });
       streamRef.current = stream;
       const v = videoRef.current;
@@ -298,7 +305,7 @@ function App() {
         </div>
       )}
       <div style={{display:'flex',flexDirection:'column',gap:'10px',width:'100%',maxWidth:'380px'}}>
-        <Btn full onClick={async()=>{ await startCam(); setPhase('markers'); setMTaps([]); setH(null); }}>
+        <Btn full onClick={()=>{ setPhase('markers'); setMTaps([]); setH(null); }}>
           Start Calibration
         </Btn>
         {mappedCount>0&&<Btn full col='#6080c0' onClick={()=>setPhase('review')}>View Existing Map</Btn>}
@@ -435,7 +442,7 @@ function App() {
                 <span style={{flex:1,fontSize:'14px',color:m?'#e0d0b8':'#5a5060'}}>
                   {p.n}{p.fdl&&<span style={{color:'#8a9098',fontSize:'11px'}}> *</span>}{p.par&&<span style={{color:GOLD,fontSize:'11px'}}> P</span>}{p.vp>0&&<span style={{color:'#b89010',fontSize:'11px'}}> +{p.vp}</span>}
                 </span>
-                <button onClick={async()=>{ await startCam(); setPhase('mapping'); if(m) setRetap(p.id); else setCurIdx(ALL_ITEMS.findIndex(x=>x.id===p.id)); }}
+                <button onClick={()=>{ setPhase('mapping'); if(m) setRetap(p.id); else setCurIdx(ALL_ITEMS.findIndex(x=>x.id===p.id)); }}
                   style={{...CIN,fontSize:'9px',color:m?'#8080a0':'#c04040',background:m?'rgba(255,255,255,.06)':'rgba(192,64,64,.1)',border:'1px solid '+(m?'rgba(255,255,255,.1)':'rgba(192,64,64,.3)'),borderRadius:'4px',padding:'4px 8px',letterSpacing:'.5px'}}>
                   {m?'Re-tap':'Tap'}
                 </button>
@@ -449,7 +456,7 @@ function App() {
               <div key={box.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'8px 12px',background:m?'rgba(96,128,192,.12)':'rgba(255,255,255,.03)',borderRadius:'7px',border:'1px solid '+(m?'rgba(96,128,192,.3)':'rgba(255,255,255,.05)')}}>
                 <div style={{width:'8px',height:'8px',borderRadius:'2px',background:m?'#6080c0':'#333',flexShrink:0}}/>
                 <span style={{flex:1,fontSize:'14px',color:m?'#e0d0b8':'#5a5060'}}>{box.n}</span>
-                <button onClick={async()=>{ await startCam(); setPhase('mapping'); if(m) setRetap(box.id); else setCurIdx(ALL_ITEMS.findIndex(x=>x.id===box.id)); }}
+                <button onClick={()=>{ setPhase('mapping'); if(m) setRetap(box.id); else setCurIdx(ALL_ITEMS.findIndex(x=>x.id===box.id)); }}
                   style={{...CIN,fontSize:'9px',color:m?'#8080a0':'#c04040',background:m?'rgba(255,255,255,.06)':'rgba(192,64,64,.1)',border:'1px solid '+(m?'rgba(255,255,255,.1)':'rgba(192,64,64,.3)'),borderRadius:'4px',padding:'4px 8px',letterSpacing:'.5px'}}>
                   {m?'Re-tap':'Tap'}
                 </button>
@@ -460,7 +467,7 @@ function App() {
         <div style={{padding:'14px 16px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',gap:'8px',flexShrink:0}}>
           <Btn full onClick={exportJSON} disabled={mappedCount<total}>Copy Calibration JSON</Btn>
           <div style={{display:'flex',gap:'8px'}}>
-            <Btn col='#6080c0' full sm onClick={async()=>{ await startCam(); setPhase('markers'); setMTaps([]); setH(null); }}>Re-run Markers</Btn>
+            <Btn col='#6080c0' full sm onClick={()=>{ setPhase('markers'); setMTaps([]); setH(null); }}>Re-run Markers</Btn>
             <Btn col='#806080' full sm onClick={()=>setPhase('intro')}>Home</Btn>
           </div>
         </div>
