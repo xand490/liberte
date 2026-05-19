@@ -71,6 +71,16 @@ function findRegion(bx,by,cal){ for(const item of Object.values(cal)) if(item.po
 function nearestCentroid(bx,by,cal){ let id=null,d=Infinity; for(const item of Object.values(cal)){ if(item.type!=='province') continue; const dd=(bx-item.board_x)**2+(by-item.board_y)**2; if(dd<d){d=dd;id=item.id;} } return id; }
 function hueDiff(a,b){ return Math.min(Math.abs(a-b),360-Math.abs(a-b)); }
 
+// ── Video draw helper — object-fit:cover behaviour ───────────────────────────
+function drawVideoCover(ctx, video, cw, ch){
+  if(!video.videoWidth||!video.videoHeight){ ctx.drawImage(video,0,0,cw,ch); return; }
+  const vr=video.videoWidth/video.videoHeight, cr=cw/ch;
+  let sx=0,sy=0,sw=video.videoWidth,sh=video.videoHeight;
+  if(vr>cr){ sw=Math.round(video.videoHeight*cr); sx=Math.round((video.videoWidth-sw)/2); }
+  else      { sh=Math.round(video.videoWidth/cr);  sy=Math.round((video.videoHeight-sh)/2); }
+  ctx.drawImage(video,sx,sy,sw,sh,0,0,cw,ch);
+}
+
 // ── Colour analysis ────────────────────────────────────────────────────────────
 function rgbToHsv(r,g,b){
   r/=255;g/=255;b/=255;
@@ -208,8 +218,9 @@ function App(){
       v.onloadedmetadata=()=>{
         v.play();
         const c=canvasRef.current; if(!c) return;
-        c.width  = v.videoWidth  || window.innerWidth;
-        c.height = v.videoHeight || window.innerHeight;
+        // Size canvas to screen (cover-crop handles the video aspect ratio)
+        c.width  = Math.round(window.innerWidth  * (window.devicePixelRatio||1));
+        c.height = Math.round(window.innerHeight * (window.devicePixelRatio||1));
       };
     }catch(e){ setCamError('Camera access denied: '+e.message); }
   },[]);
@@ -231,7 +242,7 @@ function App(){
         if(!canvas||!video){ rafRef.current=requestAnimationFrame(loop); return; }
         const ctx=canvas.getContext('2d');
         if(video.paused&&video.readyState>=2){ try{video.play();}catch(e){} }
-        if(video.readyState>=2) ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        if(video.readyState>=2) drawVideoCover(ctx,video,canvas.width,canvas.height);
         const R=Math.max(0.5,canvas.width/1000);
 
         // Baseline capture — triggered by captureBaselineRef being set
@@ -240,7 +251,7 @@ function App(){
           captureBaselineRef.current=null;
           try{
             const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
-            const SR=Math.max(14,canvas.width*0.013);
+            const SR=Math.max(28,canvas.width*0.06); // ~6% — covers centre half of province
             baselineRef.current=captureBaseline(imgData,H_inv,calibRef.current,canvas.width,canvas.height,SR);
             setHasBaseline(true);
             setToast('Baseline captured ✓'); setTimeout(()=>setToast(null),2000);
@@ -268,7 +279,7 @@ function App(){
           frameCount++;
           const H_inv=HRef.current, cal=calibRef.current;
           const isDebug=debugRef.current;
-          const SR=Math.max(14,canvas.width*0.013);
+          const SR=Math.max(28,canvas.width*0.06); // ~6% — covers centre half of province
           let newState={...stateRef.current};
 
           if(frameCount%3===0){
