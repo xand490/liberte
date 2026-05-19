@@ -261,6 +261,8 @@ function App(){
       streamRef.current=stream;
       const v=videoRef.current; if(!v) return;
       v.srcObject=stream;
+      // iOS sometimes pauses the video — restart it automatically
+      v.onpause=()=>{ try{ v.play(); } catch(e){} };
       v.onloadedmetadata=()=>{
         v.play();
         const c=canvasRef.current; if(!c) return;
@@ -287,9 +289,12 @@ function App(){
   useEffect(()=>{
     let frameCount=0;
     const loop=()=>{
+      try{
       const canvas=canvasRef.current,video=videoRef.current;
       if(!canvas||!video){rafRef.current=requestAnimationFrame(loop);return;}
       const ctx=canvas.getContext('2d');
+      // Ensure video is playing — iOS can silently pause it
+      if(video.paused&&video.readyState>=2){ try{ video.play(); } catch(e){} }
       if(video.readyState>=2) ctx.drawImage(video,0,0,canvas.width,canvas.height);
       const R=canvas.width/1000;
 
@@ -450,6 +455,7 @@ function App(){
         }
       }
 
+      } catch(err){ console.error('RAF loop error:',err); }
       rafRef.current=requestAnimationFrame(loop);
     };
     rafRef.current=requestAnimationFrame(loop);
@@ -553,10 +559,11 @@ function App(){
 
   return (
     <div style={{position:'relative',width:'100vw',height:'100vh',background:'#000',overflow:'hidden'}}>
+      {/* Video sits behind canvas — NOT hidden with opacity (iOS pauses invisible video) */}
       <video ref={videoRef} playsInline autoPlay muted
-        style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',opacity:0}}/>
+        style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',zIndex:0}}/>
       <canvas ref={canvasRef}
-        style={{position:'absolute',inset:0,width:'100%',height:'100%',touchAction:'none'}}
+        style={{position:'absolute',inset:0,width:'100%',height:'100%',touchAction:'none',zIndex:1}}
         onTouchEnd={handleTap} onClick={handleTap}/>
 
       {camError&&<div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.85)',color:'#e04040',padding:'24px',textAlign:'center',...GAR,fontSize:'16px'}}>{camError}</div>}
